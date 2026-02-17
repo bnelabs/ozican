@@ -22,6 +22,14 @@
   --font-main: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-display: 'Space Grotesk', 'Inter', sans-serif;
   --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
 }
 
 html, body {
@@ -44,6 +52,20 @@ html, body {
   display: block;
   width: 100% !important;
   height: 100% !important;
+}
+
+/* ===== Focus Styles (Accessibility) ===== */
+.nav-btn:focus-visible,
+.planet-thumb:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+#info-close:focus-visible,
+#compare-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 12px var(--accent-glow);
 }
 
 /* ===== Loading Screen ===== */
@@ -188,6 +210,8 @@ html, body {
   border-color: var(--accent);
   color: var(--accent);
   box-shadow: 0 0 12px var(--accent-glow);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 /* ===== Planet Bar ===== */
@@ -242,12 +266,14 @@ html, body {
 
 .planet-thumb:hover .thumb-dot {
   transform: scale(1.3);
-  box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 15px var(--dot-color, rgba(255, 255, 255, 0.2));
 }
 
 .planet-thumb.active .thumb-dot {
   transform: scale(1.3);
   box-shadow: 0 0 20px var(--accent-glow);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* ===== Info Panel ===== */
@@ -592,7 +618,333 @@ html, body {
   background: rgba(255, 255, 255, 0.2);
 }
 
-/* ===== Responsive ===== */
+/* ===== Touch Feedback ===== */
+.nav-btn:active,
+#info-close:active,
+#compare-close:active {
+  transform: scale(0.95);
+}
+
+.moon-item:active {
+  transform: scale(0.98);
+}
+
+.planet-thumb:active {
+  transform: scale(0.95);
+}
+
+/* ===== Moon Navigation ===== */
+.moon-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.moon-nav .nav-btn {
+  flex: 1;
+  text-align: center;
+  padding: 8px 12px;
+}
+
+/* ===== Compare Mobile Cards ===== */
+.compare-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.compare-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.compare-card-header {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.compare-card-header .planet-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.compare-card-header .planet-type {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.compare-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.compare-card-stat .label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.compare-card-stat .value {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.compare-table-wrapper {
+  overflow-x: auto;
+}
+
+/* ===== Planet Bar Scroll Indicators ===== */
+#planet-bar {
+  position: relative;
+}
+
+#planet-bar::before,
+#planet-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+#planet-bar::before {
+  left: 0;
+  background: linear-gradient(to right, var(--bg-panel), transparent);
+  border-radius: 50px 0 0 50px;
+}
+
+#planet-bar::after {
+  right: 0;
+  background: linear-gradient(to left, var(--bg-panel), transparent);
+  border-radius: 0 50px 50px 0;
+}
+
+#planet-bar.scroll-left::before {
+  opacity: 1;
+}
+
+#planet-bar.scroll-right::after {
+  opacity: 1;
+}
+
+/* ===== Onboarding ===== */
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+}
+
+.onboarding-highlight {
+  position: fixed;
+  z-index: 901;
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.onboarding-tooltip {
+  position: fixed;
+  z-index: 902;
+  background: var(--bg-panel);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 20px;
+  max-width: 320px;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.onboarding-tooltip p {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.onboarding-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.onboarding-steps {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.onboarding-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.onboarding-skip {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-main);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 6px 12px;
+}
+
+.onboarding-skip:hover {
+  color: var(--text-secondary);
+}
+
+.onboarding-next {
+  background: var(--accent);
+  border: none;
+  color: white;
+  font-family: var(--font-main);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+  transition: var(--transition);
+}
+
+.onboarding-next:hover {
+  background: #5aabff;
+}
+
+/* ===== Keyboard Shortcuts Dialog ===== */
+.keyboard-help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.keyboard-help {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  max-width: 400px;
+  width: 90%;
+  backdrop-filter: blur(30px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+}
+
+.keyboard-help h2 {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  margin-bottom: 20px;
+  color: var(--text-primary);
+}
+
+.keyboard-help-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.keyboard-help-row:last-child {
+  border-bottom: none;
+}
+
+.keyboard-help-row span {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+kbd {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-hover);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-family: var(--font-main);
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  min-width: 28px;
+  text-align: center;
+  display: inline-block;
+}
+
+/* ===== Error Screen ===== */
+.error-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 16px;
+}
+
+.error-screen h2 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  color: var(--text-primary);
+}
+
+.error-screen p {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  max-width: 400px;
+  line-height: 1.6;
+}
+
+.error-screen button {
+  background: var(--accent);
+  border: none;
+  color: white;
+  font-family: var(--font-main);
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 10px 24px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  margin-top: 8px;
+  transition: var(--transition);
+}
+
+.error-screen button:hover {
+  background: #5aabff;
+}
+
+.loading-timeout {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-top: 12px;
+}
+
+/* ===== Responsive — Tablet (1024px) ===== */
+@media (max-width: 1024px) {
+  #info-panel {
+    width: 360px;
+  }
+
+  #compare-panel {
+    width: 92vw;
+    max-width: 900px;
+  }
+}
+
+/* ===== Responsive — Mobile (768px) ===== */
 @media (max-width: 768px) {
   #top-nav {
     padding: 8px 12px;
@@ -609,22 +961,38 @@ html, body {
   .nav-btn {
     padding: 5px 8px;
     font-size: 0.72rem;
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   #planet-bar {
     gap: 2px;
     padding: 6px 8px;
     bottom: 10px;
+    overflow-x: auto;
+    max-width: 100vw;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  #planet-bar::-webkit-scrollbar {
+    display: none;
   }
 
   .planet-thumb {
     padding: 4px 6px;
     font-size: 0.6rem;
+    min-width: 44px;
+    min-height: 44px;
+    flex-shrink: 0;
   }
 
   .thumb-dot {
-    width: 14px;
-    height: 14px;
+    width: 20px;
+    height: 20px;
   }
 
   #info-panel {
@@ -645,6 +1013,29 @@ html, body {
   .info-grid {
     grid-template-columns: 1fr;
   }
+
+  #compare-panel {
+    width: 95vw;
+    max-width: 100%;
+    padding: 20px;
+  }
+}
+
+/* ===== Responsive — Small phones (480px) ===== */
+@media (max-width: 480px) {
+  #btn-orbits,
+  #btn-labels,
+  #btn-fullscreen {
+    display: none;
+  }
+
+  .nav-btn {
+    padding: 4px 6px;
+  }
+
+  .brand-name {
+    font-size: 1.1rem;
+  }
 }
 
 /* ===== Animations ===== */
@@ -657,6 +1048,18 @@ html, body {
   animation: fadeIn 0.5s ease forwards;
 }
 
+/* Staggered section fade-in */
+.info-section.fade-in:nth-child(1) { animation-delay: 0.06s; }
+.info-section.fade-in:nth-child(2) { animation-delay: 0.12s; }
+.info-section.fade-in:nth-child(3) { animation-delay: 0.18s; }
+.info-section.fade-in:nth-child(4) { animation-delay: 0.24s; }
+.info-section.fade-in:nth-child(5) { animation-delay: 0.30s; }
+.info-section.fade-in:nth-child(6) { animation-delay: 0.36s; }
+.info-section.fade-in:nth-child(7) { animation-delay: 0.42s; }
+.info-section.fade-in:nth-child(8) { animation-delay: 0.48s; }
+.info-section.fade-in:nth-child(9) { animation-delay: 0.54s; }
+.info-section.fade-in:nth-child(10) { animation-delay: 0.60s; }
+
 @keyframes pulse {
   0%, 100% { opacity: 0.6; }
   50% { opacity: 1; }
@@ -664,4 +1067,18 @@ html, body {
 
 .pulse {
   animation: pulse 2s ease-in-out infinite;
+}
+
+/* ===== Reduced Motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .loader-ring {
+    animation: none;
+  }
 }

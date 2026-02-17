@@ -59,7 +59,18 @@ export class SolarSystemScene {
   async _init() {
     this.onProgress(5);
 
+    // Check WebGL support
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    if (!gl) {
+      document.dispatchEvent(new CustomEvent('scene-error', {
+        detail: 'WebGL is not supported by your browser. Please try a modern browser like Chrome, Firefox, or Edge.',
+      }));
+      return;
+    }
+
     // Renderer
+    try {
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: false,
@@ -113,6 +124,11 @@ export class SolarSystemScene {
 
     // Start render loop
     this._animate();
+    } catch (err) {
+      document.dispatchEvent(new CustomEvent('scene-error', {
+        detail: 'Failed to initialize 3D renderer: ' + err.message,
+      }));
+    }
   }
 
   _createStarfield() {
@@ -585,6 +601,11 @@ export class SolarSystemScene {
     const delta = this.clock.getDelta();
     const elapsed = this.clock.getElapsedTime();
     const speed = this.animationSpeed;
+
+    // Subtle starfield drift
+    if (this.starfield) {
+      this.starfield.rotation.y += 0.00002 * speed;
+    }
 
     // Update sun shader
     if (this.sun.material.uniforms) {

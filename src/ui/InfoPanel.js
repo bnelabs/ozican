@@ -185,6 +185,24 @@ export function renderMoonInfo(planetKey, moonIndex) {
     html += `</div></div>`;
   }
 
+  // Moon prev/next navigation
+  const moonCount = planet.moons.length;
+  if (moonCount > 1) {
+    const prevName = moonIndex > 0 ? planet.moons[moonIndex - 1].name : null;
+    const nextName = moonIndex < moonCount - 1 ? planet.moons[moonIndex + 1].name : null;
+    html += `
+      <div class="info-section">
+        <div class="moon-nav">
+          <button class="nav-btn" id="moon-prev" ${!prevName ? 'disabled' : ''}>
+            &larr; ${prevName || 'Prev'}
+          </button>
+          <button class="nav-btn" id="moon-next" ${!nextName ? 'disabled' : ''}>
+            ${nextName || 'Next'} &rarr;
+          </button>
+        </div>
+      </div>`;
+  }
+
   // Back button
   html += `
     <div class="info-section">

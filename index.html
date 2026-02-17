@@ -8,7 +8,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 </head>
 <body>
-  <div id="canvas-container"></div>
+  <main role="application" aria-label="3D Solar System Visualization">
+    <div id="canvas-container"></div>
+  </main>
 
   <!-- Loading screen -->
   <div id="loading-screen">
@@ -25,81 +27,81 @@
   </div>
 
   <!-- Top navigation -->
-  <nav id="top-nav">
+  <nav id="top-nav" aria-label="Main navigation">
     <div class="nav-brand">
       <span class="brand-icon">&#9788;</span>
       <span class="brand-name">Ozican</span>
       <span class="brand-tagline">Solar System Explorer</span>
     </div>
     <div class="nav-controls">
-      <button id="btn-overview" class="nav-btn active" title="Solar System Overview">Overview</button>
-      <button id="btn-compare" class="nav-btn" title="Compare Planets">Compare</button>
-      <button id="btn-speed" class="nav-btn" title="Animation Speed">
+      <button id="btn-overview" class="nav-btn active" title="Solar System Overview" aria-label="Solar System Overview">Overview</button>
+      <button id="btn-compare" class="nav-btn" title="Compare Planets" aria-label="Compare Planets" aria-pressed="false">Compare</button>
+      <button id="btn-speed" class="nav-btn" title="Animation Speed" aria-label="Animation Speed: 1x">
         Speed: <span id="speed-label">1x</span>
       </button>
-      <button id="btn-orbits" class="nav-btn active" title="Toggle Orbit Lines">Orbits</button>
-      <button id="btn-labels" class="nav-btn active" title="Toggle Labels">Labels</button>
-      <button id="btn-fullscreen" class="nav-btn" title="Fullscreen">&#x26F6;</button>
+      <button id="btn-orbits" class="nav-btn active" title="Toggle Orbit Lines" aria-label="Toggle Orbit Lines" aria-pressed="true">Orbits</button>
+      <button id="btn-labels" class="nav-btn active" title="Toggle Labels" aria-label="Toggle Labels" aria-pressed="true">Labels</button>
+      <button id="btn-fullscreen" class="nav-btn" title="Fullscreen" aria-label="Toggle Fullscreen">&#x26F6;</button>
     </div>
   </nav>
 
   <!-- Planet selector bar -->
-  <div id="planet-bar">
-    <button class="planet-thumb" data-planet="sun" title="Sun">
-      <div class="thumb-dot" style="background: #FDB813;"></div>
+  <div id="planet-bar" role="navigation" aria-label="Planet selector">
+    <button class="planet-thumb" data-planet="sun" title="Sun" aria-label="Select Sun">
+      <div class="thumb-dot" style="background: #FDB813; --dot-color: #FDB813;"></div>
       <span>Sun</span>
     </button>
-    <button class="planet-thumb" data-planet="mercury" title="Mercury">
-      <div class="thumb-dot" style="background: #8C7E6D;"></div>
+    <button class="planet-thumb" data-planet="mercury" title="Mercury" aria-label="Select Mercury">
+      <div class="thumb-dot" style="background: #8C7E6D; --dot-color: #8C7E6D;"></div>
       <span>Mercury</span>
     </button>
-    <button class="planet-thumb" data-planet="venus" title="Venus">
-      <div class="thumb-dot" style="background: #C4A45A;"></div>
+    <button class="planet-thumb" data-planet="venus" title="Venus" aria-label="Select Venus">
+      <div class="thumb-dot" style="background: #C4A45A; --dot-color: #C4A45A;"></div>
       <span>Venus</span>
     </button>
-    <button class="planet-thumb" data-planet="earth" title="Earth">
-      <div class="thumb-dot" style="background: #4A90D9;"></div>
+    <button class="planet-thumb" data-planet="earth" title="Earth" aria-label="Select Earth">
+      <div class="thumb-dot" style="background: #4A90D9; --dot-color: #4A90D9;"></div>
       <span>Earth</span>
     </button>
-    <button class="planet-thumb" data-planet="mars" title="Mars">
-      <div class="thumb-dot" style="background: #C1440E;"></div>
+    <button class="planet-thumb" data-planet="mars" title="Mars" aria-label="Select Mars">
+      <div class="thumb-dot" style="background: #C1440E; --dot-color: #C1440E;"></div>
       <span>Mars</span>
     </button>
-    <button class="planet-thumb" data-planet="jupiter" title="Jupiter">
-      <div class="thumb-dot" style="background: #C88B3A;"></div>
+    <button class="planet-thumb" data-planet="jupiter" title="Jupiter" aria-label="Select Jupiter">
+      <div class="thumb-dot" style="background: #C88B3A; --dot-color: #C88B3A;"></div>
       <span>Jupiter</span>
     </button>
-    <button class="planet-thumb" data-planet="saturn" title="Saturn">
-      <div class="thumb-dot" style="background: #C5AB6E;"></div>
+    <button class="planet-thumb" data-planet="saturn" title="Saturn" aria-label="Select Saturn">
+      <div class="thumb-dot" style="background: #C5AB6E; --dot-color: #C5AB6E;"></div>
       <span>Saturn</span>
     </button>
-    <button class="planet-thumb" data-planet="uranus" title="Uranus">
-      <div class="thumb-dot" style="background: #72B5C4;"></div>
+    <button class="planet-thumb" data-planet="uranus" title="Uranus" aria-label="Select Uranus">
+      <div class="thumb-dot" style="background: #72B5C4; --dot-color: #72B5C4;"></div>
       <span>Uranus</span>
     </button>
-    <button class="planet-thumb" data-planet="neptune" title="Neptune">
-      <div class="thumb-dot" style="background: #3E54A3;"></div>
+    <button class="planet-thumb" data-planet="neptune" title="Neptune" aria-label="Select Neptune">
+      <div class="thumb-dot" style="background: #3E54A3; --dot-color: #3E54A3;"></div>
       <span>Neptune</span>
     </button>
   </div>
 
   <!-- Info panel (slides in on planet click) -->
-  <div id="info-panel" class="hidden">
-    <button id="info-close">&times;</button>
+  <div id="info-panel" class="hidden" role="dialog" aria-label="Planet Information" aria-hidden="true">
+    <button id="info-close" aria-label="Close planet information">&times;</button>
     <div id="info-content">
       <!-- Dynamically populated -->
     </div>
   </div>
 
   <!-- Compare panel -->
-  <div id="compare-panel" class="hidden">
-    <button id="compare-close">&times;</button>
+  <div id="compare-panel" class="hidden" role="dialog" aria-label="Planet Comparison" aria-hidden="true">
+    <button id="compare-close" aria-label="Close comparison panel">&times;</button>
     <h2>Planet Comparison</h2>
     <div id="compare-content"></div>
   </div>
 
   <!-- Tooltip -->
-  <div id="tooltip" class="hidden"></div>
+  <div id="tooltip" class="hidden" aria-live="polite"></div>
 
   <script type="module" src="/src/main.js"></script>
 </body>
