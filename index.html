@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ozican — Solar System Explorer</title>
+  <link rel="stylesheet" href="/src/styles/main.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <!-- Loading screen -->
+  <div id="loading-screen">
+    <div class="loader">
+      <div class="loader-ring"></div>
+      <div class="loader-text">
+        <h1>Ozican</h1>
+        <p>Loading the Solar System...</p>
+        <div class="progress-bar">
+          <div class="progress-fill" id="load-progress"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top navigation -->
+  <nav id="top-nav">
+    <div class="nav-brand">
+      <span class="brand-icon">&#9788;</span>
+      <span class="brand-name">Ozican</span>
+      <span class="brand-tagline">Solar System Explorer</span>
+    </div>
+    <div class="nav-controls">
+      <button id="btn-overview" class="nav-btn active" title="Solar System Overview">Overview</button>
+      <button id="btn-compare" class="nav-btn" title="Compare Planets">Compare</button>
+      <button id="btn-speed" class="nav-btn" title="Animation Speed">
+        Speed: <span id="speed-label">1x</span>
+      </button>
+      <button id="btn-orbits" class="nav-btn active" title="Toggle Orbit Lines">Orbits</button>
+      <button id="btn-labels" class="nav-btn active" title="Toggle Labels">Labels</button>
+      <button id="btn-fullscreen" class="nav-btn" title="Fullscreen">&#x26F6;</button>
+    </div>
+  </nav>
+
+  <!-- Planet selector bar -->
+  <div id="planet-bar">
+    <button class="planet-thumb" data-planet="sun" title="Sun">
+      <div class="thumb-dot" style="background: #FDB813;"></div>
+      <span>Sun</span>
+    </button>
+    <button class="planet-thumb" data-planet="mercury" title="Mercury">
+      <div class="thumb-dot" style="background: #8C7E6D;"></div>
+      <span>Mercury</span>
+    </button>
+    <button class="planet-thumb" data-planet="venus" title="Venus">
+      <div class="thumb-dot" style="background: #C4A45A;"></div>
+      <span>Venus</span>
+    </button>
+    <button class="planet-thumb" data-planet="earth" title="Earth">
+      <div class="thumb-dot" style="background: #4A90D9;"></div>
+      <span>Earth</span>
+    </button>
+    <button class="planet-thumb" data-planet="mars" title="Mars">
+      <div class="thumb-dot" style="background: #C1440E;"></div>
+      <span>Mars</span>
+    </button>
+    <button class="planet-thumb" data-planet="jupiter" title="Jupiter">
+      <div class="thumb-dot" style="background: #C88B3A;"></div>
+      <span>Jupiter</span>
+    </button>
+    <button class="planet-thumb" data-planet="saturn" title="Saturn">
+      <div class="thumb-dot" style="background: #C5AB6E;"></div>
+      <span>Saturn</span>
+    </button>
+    <button class="planet-thumb" data-planet="uranus" title="Uranus">
+      <div class="thumb-dot" style="background: #72B5C4;"></div>
+      <span>Uranus</span>
+    </button>
+    <button class="planet-thumb" data-planet="neptune" title="Neptune">
+      <div class="thumb-dot" style="background: #3E54A3;"></div>
+      <span>Neptune</span>
+    </button>
+  </div>
+
+  <!-- Info panel (slides in on planet click) -->
+  <div id="info-panel" class="hidden">
+    <button id="info-close">&times;</button>
+    <div id="info-content">
+      <!-- Dynamically populated -->
+    </div>
+  </div>
+
+  <!-- Compare panel -->
+  <div id="compare-panel" class="hidden">
+    <button id="compare-close">&times;</button>
+    <h2>Planet Comparison</h2>
+    <div id="compare-content"></div>
+  </div>
+
+  <!-- Tooltip -->
+  <div id="tooltip" class="hidden"></div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
