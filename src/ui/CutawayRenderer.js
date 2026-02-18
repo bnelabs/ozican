@@ -4,9 +4,9 @@
  * quadrant (quarter-section) of the sphere, exposing curved 3D interior layers —
  * like a National Geographic / geology textbook illustration.
  *
- * IMPORTANT: Three.js material.clippingPlanes are in WORLD space. Since planets orbit
- * at various world positions, all clip planes must be offset to the planet's current
- * world position and updated every frame to track it.
+ * All clip planes are defined in LOCAL space and transformed to WORLD space each frame
+ * using the planet's matrixWorld. This ensures the cutaway tracks the planet's orbital
+ * position AND self-rotation perfectly — no independent spinning.
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -37,10 +37,6 @@ float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
 }
 
-float hash3(vec3 p) {
-  return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453123);
-}
-
 float noise2D(vec2 p) {
   vec2 i = floor(p);
   vec2 f = fract(p);
@@ -52,7 +48,6 @@ float noise2D(vec2 p) {
   return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-// Fractal Brownian Motion — 6 octaves for rich geological detail
 float fbm(vec2 p) {
   float f = 0.0, a = 0.5;
   for (int i = 0; i < 6; i++) {
@@ -63,7 +58,6 @@ float fbm(vec2 p) {
   return f;
 }
 
-// Domain-warped FBM for organic geological patterns
 float warpedFbm(vec2 p, float t) {
   vec2 q = vec2(fbm(p + vec2(0.0, 0.0)),
                 fbm(p + vec2(5.2, 1.3)));
@@ -72,7 +66,6 @@ float warpedFbm(vec2 p, float t) {
   return fbm(p + 4.0 * r);
 }
 
-// Voronoi / cellular noise for crystalline patterns
 float voronoi(vec2 p) {
   vec2 i = floor(p);
   vec2 f = fract(p);
@@ -90,68 +83,50 @@ float voronoi(vec2 p) {
 
 /* ---- Per-layer texture generators ---- */
 
-// Rock/crust: stratified layers with fractures
 vec3 rockTexture(vec2 p, vec3 baseCol, vec3 deepCol, float t) {
-  // Horizontal strata with FBM warping
   vec2 warp = vec2(fbm(p * 3.0), fbm(p * 3.0 + 7.3));
   float strata = fbm(vec2(p.x * 2.0, p.y * 12.0) + warp * 1.5);
-  // Fracture lines
   float fractures = smoothstep(0.48, 0.50, fbm(p * 20.0));
   vec3 col = mix(baseCol, deepCol, strata * 0.7);
   col *= 1.0 - fractures * 0.3;
-  // Subtle grain
   col *= 0.92 + noise2D(p * 40.0) * 0.16;
   return col;
 }
 
-// Mantle: slow convection cells with thermal gradients
 vec3 mantleTexture(vec2 p, vec3 baseCol, vec3 deepCol, float t) {
-  // Animated convection using domain warping
   vec2 flow = vec2(0.0, t * 0.015);
   float convection = warpedFbm(p * 2.5 + flow, t);
-  // Convection cell boundaries (brighter)
   float cellEdge = smoothstep(0.3, 0.5, convection) - smoothstep(0.5, 0.7, convection);
   vec3 col = mix(deepCol, baseCol, convection);
-  // Hot upwelling streaks
   float upwelling = smoothstep(0.65, 0.85, fbm(p * 4.0 + flow * 2.0));
   col = mix(col, baseCol * 1.4, upwelling * 0.5);
-  // Cell boundary glow
   col += vec3(0.15, 0.06, 0.02) * cellEdge * 2.0;
   col *= 0.9 + noise2D(p * 15.0 + t * 0.1) * 0.2;
   return col;
 }
 
-// Liquid metal: turbulent flow with metallic shimmer
 vec3 liquidTexture(vec2 p, vec3 baseCol, vec3 deepCol, float t) {
-  // Fast turbulent flow
   vec2 flow = vec2(t * 0.04, t * 0.025);
   float turb = warpedFbm(p * 3.0 + flow, t * 2.0);
-  // Metallic shimmer bands
   float shimmer = sin(turb * 12.0 + t * 1.5) * 0.5 + 0.5;
   vec3 col = mix(deepCol, baseCol, turb);
-  // Bright metallic highlights
   col += baseCol * shimmer * 0.3;
-  // Flowing ripples
   float ripple = sin(p.x * 8.0 + p.y * 5.0 + turb * 6.0 + t * 0.8) * 0.5 + 0.5;
   col = mix(col, baseCol * 1.3, ripple * 0.2);
   return col;
 }
 
-// Crystal: Voronoi facets with internal glow
 vec3 crystalTexture(vec2 p, vec3 baseCol, vec3 deepCol, float t) {
   float cells = voronoi(p * 8.0);
   float cellEdge = smoothstep(0.0, 0.12, cells);
-  // Pulsing internal glow
   float pulse = sin(t * 1.2) * 0.15 + 0.85;
   vec3 col = mix(baseCol * 1.5, deepCol, cellEdge);
   col *= pulse;
-  // Bright crystal faces
   float facets = voronoi(p * 16.0 + t * 0.1);
   col += baseCol * 0.4 * smoothstep(0.3, 0.0, facets);
   return col;
 }
 
-// Gas: swirling cloud bands
 vec3 gasTexture(vec2 p, vec3 baseCol, vec3 deepCol, float t) {
   vec2 flow = vec2(t * 0.02, 0.0);
   float bands = sin(p.y * 20.0 + fbm(p * 3.0 + flow) * 4.0) * 0.5 + 0.5;
@@ -161,14 +136,11 @@ vec3 gasTexture(vec2 p, vec3 baseCol, vec3 deepCol, float t) {
   return col;
 }
 
-// Ice: translucent fracture patterns
 vec3 iceTexture(vec2 p, vec3 baseCol, vec3 deepCol, float t) {
   float cracks = voronoi(p * 6.0);
   float subCracks = voronoi(p * 18.0);
   vec3 col = mix(baseCol, deepCol, smoothstep(0.0, 0.3, cracks));
-  // Fine internal fractures
   col = mix(col, baseCol * 1.3, smoothstep(0.02, 0.0, subCracks) * 0.4);
-  // Subtle translucent shimmer
   col += vec3(0.05, 0.08, 0.12) * sin(t * 0.8 + cracks * 8.0) * 0.3;
   return col;
 }
@@ -178,10 +150,8 @@ void main() {
   float dist = length(centered);
   if (dist > 1.0) discard;
 
-  // Angle for texture coordinate variety
   float angle = atan(centered.y, centered.x);
 
-  // Find which layer this fragment belongs to + blend at boundaries
   vec3 color = layerColors[0];
   int currentLayer = 0;
   for (int i = 0; i < 8; i++) {
@@ -191,15 +161,12 @@ void main() {
     }
   }
 
-  // Get layer colors and type
   vec3 baseCol = layerColors[currentLayer];
   vec3 deepCol = layerDeepColors[currentLayer];
   int lType = layerTypes[currentLayer];
 
-  // Texture coordinate based on position within the disc
   vec2 texCoord = centered * 3.0;
 
-  // Apply per-layer texture
   if (lType == 0) {
     color = rockTexture(texCoord, baseCol, deepCol, time);
   } else if (lType == 1) {
@@ -220,33 +187,26 @@ void main() {
     float boundary = layerRadii[i];
     float boundaryDist = abs(dist - boundary);
     if (boundaryDist < 0.03) {
-      // Thermal gradient glow at boundaries (warm orange-red)
       float glow = exp(-pow(boundaryDist / 0.012, 2.0));
-      float depth = 1.0 - boundary; // deeper = warmer
+      float depth = 1.0 - boundary;
       vec3 glowColor = mix(vec3(0.2, 0.15, 0.1), vec3(0.5, 0.25, 0.05), depth);
       color += glowColor * glow * 1.5;
     }
   }
 
-  // Depth-based color temperature shift (cool surface → hot core)
   float depthFactor = 1.0 - dist;
   color = mix(color, color * vec3(1.1, 0.95, 0.85), depthFactor * 0.3);
 
-  // Core emissive bloom with physically-based falloff
   float coreRadius = layerRadii[layerCount - 1];
   if (dist < coreRadius * 2.0) {
     float coreDist = dist / coreRadius;
     float coreGlow = exp(-coreDist * coreDist * 1.5);
     vec3 coreCol = layerColors[layerCount - 1];
-    // Intense white-hot center fading to layer color
     vec3 hotCenter = mix(coreCol * 2.0, vec3(1.0, 0.95, 0.8), coreGlow * 0.6);
     color += hotCenter * coreGlow * 0.8;
   }
 
-  // Radial depth darkening (stronger at edges for 3D volume feel)
   color *= 1.0 - 0.35 * pow(dist, 1.5);
-
-  // Subtle time-based shimmer
   color *= 1.0 + sin(time * 1.2 + dist * 5.0 + angle * 2.0) * 0.015;
 
   gl_FragColor = vec4(color, 1.0);
@@ -254,12 +214,6 @@ void main() {
 `;
 
 export class CutawayRenderer {
-  /**
-   * @param {HTMLElement} containerElement - DOM container for labels overlay
-   * @param {string} planetKey - Key of the planet to show cross-section for
-   * @param {THREE.Mesh} [planetMesh] - Optional: the actual planet mesh in the main scene
-   * @param {THREE.WebGLRenderer} [renderer] - Optional: the main scene renderer
-   */
   constructor(containerElement, planetKey, planetMesh, renderer) {
     this.container = containerElement;
     this.planetKey = planetKey;
@@ -278,12 +232,15 @@ export class CutawayRenderer {
     this._faceMaterial1 = null;
     this._faceMaterial2 = null;
 
-    // Semi-circle clip planes for faces/rims (updated each frame)
-    this._semiClipZ = null;
-    this._semiClipX = null;
+    // LOCAL-space clip plane templates (transformed to world space each frame)
+    this._localClip1 = null; // clips +X in local space
+    this._localClip2 = null; // clips +Z in local space
+    this._localSemiZ = null; // semi-circle clip for face 1
+    this._localSemiX = null; // semi-circle clip for face 2
 
-    // World position tracker
-    this._worldPos = new THREE.Vector3();
+    // Reusable objects to avoid per-frame allocation
+    this._normalMat = new THREE.Matrix3();
+    this._tempPlane = new THREE.Plane();
 
     // Fallback: if no planet mesh provided, use legacy mini-renderer mode
     this._useLegacyMode = !planetMesh;
@@ -307,20 +264,18 @@ export class CutawayRenderer {
     this._initOnPlanet(layers);
   }
 
-  /** Classify layer type from its key name */
   _classifyLayer(key) {
     const k = key.toLowerCase();
-    if (k.includes('core') && (k.includes('inner') || k.includes('solid'))) return 3; // crystal
-    if (k.includes('core') || k.includes('metallic')) return 2; // liquid metal
-    if (k.includes('mantle') && !k.includes('ice')) return 1; // mantle convection
+    if (k.includes('core') && (k.includes('inner') || k.includes('solid'))) return 3;
+    if (k.includes('core') || k.includes('metallic')) return 2;
+    if (k.includes('mantle') && !k.includes('ice')) return 1;
     if (k.includes('cloud') || k.includes('atmosphere') || k.includes('molecular') ||
         k.includes('corona') || k.includes('chromosphere') || k.includes('photosphere') ||
-        k.includes('convective') || k.includes('radiative')) return 4; // gas
-    if (k.includes('ice') || k.includes('ocean') || k.includes('nitrogen')) return 5; // ice
-    return 0; // rock/crust
+        k.includes('convective') || k.includes('radiative')) return 4;
+    if (k.includes('ice') || k.includes('ocean') || k.includes('nitrogen')) return 5;
+    return 0;
   }
 
-  /** Build cinematic cross-section face ShaderMaterial from layer data */
   _buildFaceMaterial(layers, maxR) {
     const colors = [];
     const deepColors = [];
@@ -330,7 +285,6 @@ export class CutawayRenderer {
       if (i < layers.length) {
         const baseCol = new THREE.Color(layers[i].color);
         colors.push(baseCol);
-        // Deep color: darker, warmer variant for texture mixing
         const deep = layers[i].deepColor
           ? new THREE.Color(layers[i].deepColor)
           : baseCol.clone().multiplyScalar(0.6);
@@ -361,50 +315,30 @@ export class CutawayRenderer {
     });
   }
 
-  /** Create per-layer material with geological differentiation */
   _createLayerMaterial(layer, isCore, isInner, layers) {
     const layerType = this._classifyLayer(layer.key);
     const baseColor = new THREE.Color(layer.color);
 
-    // Material properties vary by geological type
     let roughness, metalness, emissiveScale, emissiveIntensity;
 
     switch (layerType) {
-      case 3: // crystal inner core
-        roughness = 0.2;
-        metalness = 0.4;
-        emissiveScale = 0.7;
-        emissiveIntensity = 3.0;
+      case 3:
+        roughness = 0.2; metalness = 0.4; emissiveScale = 0.7; emissiveIntensity = 3.0;
         break;
-      case 2: // liquid metal outer core
-        roughness = 0.15;
-        metalness = 0.6;
-        emissiveScale = 0.5;
-        emissiveIntensity = 2.0;
+      case 2:
+        roughness = 0.15; metalness = 0.6; emissiveScale = 0.5; emissiveIntensity = 2.0;
         break;
-      case 1: // mantle convection
-        roughness = 0.55;
-        metalness = 0.1;
-        emissiveScale = 0.3;
-        emissiveIntensity = 1.2;
+      case 1:
+        roughness = 0.55; metalness = 0.1; emissiveScale = 0.3; emissiveIntensity = 1.2;
         break;
-      case 4: // gas
-        roughness = 0.8;
-        metalness = 0.0;
-        emissiveScale = 0.15;
-        emissiveIntensity = 0.8;
+      case 4:
+        roughness = 0.8; metalness = 0.0; emissiveScale = 0.15; emissiveIntensity = 0.8;
         break;
-      case 5: // ice
-        roughness = 0.25;
-        metalness = 0.05;
-        emissiveScale = 0.1;
-        emissiveIntensity = 0.5;
+      case 5:
+        roughness = 0.25; metalness = 0.05; emissiveScale = 0.1; emissiveIntensity = 0.5;
         break;
-      default: // rock/crust
-        roughness = 0.75;
-        metalness = 0.08;
-        emissiveScale = 0.05;
-        emissiveIntensity = 0.3;
+      default:
+        roughness = 0.75; metalness = 0.08; emissiveScale = 0.05; emissiveIntensity = 0.3;
         break;
     }
 
@@ -430,15 +364,26 @@ export class CutawayRenderer {
       : 1;
 
     const maxR = layers[0].r;
-
-    // Get planet world position
-    this.planetMesh.getWorldPosition(this._worldPos);
-    const wx = this._worldPos.x;
-    const wz = this._worldPos.z;
     const offset = planetRadius * 1.1;
 
-    this.clipPlane1 = new THREE.Plane(new THREE.Vector3(-1, 0, 0), wx + offset);
-    this.clipPlane2 = new THREE.Plane(new THREE.Vector3(0, 0, -1), wz + offset);
+    // Define clip planes in LOCAL space — transformed to world space each frame
+    // These start with offset (nothing clipped) and animate to 0 (full wedge)
+    this._localClip1 = new THREE.Plane(new THREE.Vector3(-1, 0, 0), offset);
+    this._localClip2 = new THREE.Plane(new THREE.Vector3(0, 0, -1), offset);
+
+    // Semi-circle clips: clip face 1 to -Z hemisphere, face 2 to -X hemisphere
+    this._localSemiZ = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
+    this._localSemiX = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0);
+
+    // Create live world-space planes (updated each frame)
+    this.clipPlane1 = new THREE.Plane();
+    this.clipPlane2 = new THREE.Plane();
+    this._semiClipZ = new THREE.Plane();
+    this._semiClipX = new THREE.Plane();
+
+    // Initial world-space transform
+    this._updateClipPlanes(1.0); // offset=full, nothing clipped
+
     const clipPlanes = [this.clipPlane1, this.clipPlane2];
 
     // Save original material and modify to support clipping
@@ -452,7 +397,7 @@ export class CutawayRenderer {
     clippedMat.side = THREE.DoubleSide;
     this.planetMesh.material = clippedMat;
 
-    // Also clip child meshes
+    // Also clip child meshes (rings, atmosphere, etc.)
     this.planetMesh.children.forEach(child => {
       if (child.material) {
         this._originalMaterials.push({ mesh: child, material: child.material });
@@ -465,7 +410,7 @@ export class CutawayRenderer {
       }
     });
 
-    // Create concentric layer spheres with per-layer geological materials
+    // Create concentric layer spheres
     for (let i = 0; i < layers.length; i++) {
       const layer = layers[i];
       if (i === 0) continue;
@@ -485,36 +430,59 @@ export class CutawayRenderer {
       this.layerMeshes.push({ mesh, data: layer, radius });
     }
 
-    // Create two cross-section face discs
-    this._createWedgeFaces(layers, maxR, planetRadius, wx, wz);
+    // Cross-section face discs (clipped to semi-circles by _semiClipZ/_semiClipX)
+    this._createWedgeFaces(layers, maxR, planetRadius);
 
-    // Core glow — multiple lights for cinematic depth
+    // Core glow lights
     const coreColor = new THREE.Color(layers[layers.length - 1].color);
     this._coreLight = new THREE.PointLight(coreColor, 3.0, planetRadius * 2.5, 1.5);
     this.planetMesh.add(this._coreLight);
 
-    // Secondary warm fill light for interior illumination
     const fillLight = new THREE.PointLight(0xff6633, 1.0, planetRadius * 1.5, 2);
     fillLight.position.set(0, 0, 0);
     this.planetMesh.add(fillLight);
     this.layerMeshes.push({ mesh: fillLight, data: null, radius: 0, isLight: true });
 
-    // Two rim rings
+    // Rim rings
     this._createWedgeRims(planetRadius);
-
-    // 3D labels that follow the planet (only on main mode)
-    this._create3DLabels(layers, maxR, planetRadius);
 
     this._startTime = performance.now();
     this._animate();
   }
 
-  /** Create two semi-circular face discs for the wedge cutaway */
-  _createWedgeFaces(layers, maxR, planetRadius, wx, wz) {
-    this._semiClipZ = new THREE.Plane(new THREE.Vector3(0, 0, -1), wz);
-    this._semiClipX = new THREE.Plane(new THREE.Vector3(-1, 0, 0), wx);
+  /** Transform local-space clip planes to world space using the planet's matrixWorld */
+  _updateClipPlanes(animOffset) {
+    this.planetMesh.updateWorldMatrix(true, false);
+    const mat4 = this.planetMesh.matrixWorld;
+    this._normalMat.getNormalMatrix(mat4);
 
-    // Face 1: X-cut face at x=0 (local), showing -Z hemisphere
+    const offset = this._getMaxRadius() * 1.1;
+
+    // Main clip plane 1: local (-1,0,0) with animated constant
+    this._tempPlane.copy(this._localClip1);
+    this._tempPlane.constant = offset * animOffset;
+    this._tempPlane.applyMatrix4(mat4, this._normalMat);
+    this.clipPlane1.copy(this._tempPlane);
+
+    // Main clip plane 2: local (0,0,-1) with animated constant
+    this._tempPlane.copy(this._localClip2);
+    this._tempPlane.constant = offset * animOffset;
+    this._tempPlane.applyMatrix4(mat4, this._normalMat);
+    this.clipPlane2.copy(this._tempPlane);
+
+    // Semi-circle clip for face 1 (clips to -Z local hemisphere)
+    this._tempPlane.copy(this._localSemiZ);
+    this._tempPlane.applyMatrix4(mat4, this._normalMat);
+    this._semiClipZ.copy(this._tempPlane);
+
+    // Semi-circle clip for face 2 (clips to -X local hemisphere)
+    this._tempPlane.copy(this._localSemiX);
+    this._tempPlane.applyMatrix4(mat4, this._normalMat);
+    this._semiClipX.copy(this._tempPlane);
+  }
+
+  _createWedgeFaces(layers, maxR, planetRadius) {
+    // Face 1: X-cut face at local x=0, showing -Z hemisphere
     this._faceMaterial1 = this._buildFaceMaterial(layers, maxR);
     this._faceMaterial1.clippingPlanes = [this._semiClipZ];
     this._faceMaterial1.clipIntersection = false;
@@ -526,7 +494,7 @@ export class CutawayRenderer {
     this.planetMesh.add(faceMesh1);
     this.layerMeshes.push({ mesh: faceMesh1, data: null, radius: planetRadius, isFace: true });
 
-    // Face 2: Z-cut face at z=0 (local), showing -X hemisphere
+    // Face 2: Z-cut face at local z=0, showing -X hemisphere
     this._faceMaterial2 = this._buildFaceMaterial(layers, maxR);
     this._faceMaterial2.clippingPlanes = [this._semiClipX];
     this._faceMaterial2.clipIntersection = false;
@@ -539,16 +507,12 @@ export class CutawayRenderer {
     this.layerMeshes.push({ mesh: faceMesh2, data: null, radius: planetRadius, isFace: true });
   }
 
-  /** Create two semi-circular rim rings for the wedge cutaway */
   _createWedgeRims(planetRadius) {
     const rimGeo = new THREE.RingGeometry(planetRadius * 0.995, planetRadius, 64, 1);
 
     const rimMat1 = new THREE.MeshBasicMaterial({
-      color: 0xffddaa,
-      transparent: true,
-      opacity: 0.5,
-      side: THREE.DoubleSide,
-      clippingPlanes: [this._semiClipZ],
+      color: 0xffddaa, transparent: true, opacity: 0.5,
+      side: THREE.DoubleSide, clippingPlanes: [this._semiClipZ],
     });
     const rimMesh1 = new THREE.Mesh(rimGeo.clone(), rimMat1);
     rimMesh1.rotation.y = Math.PI / 2;
@@ -557,11 +521,8 @@ export class CutawayRenderer {
     this.layerMeshes.push({ mesh: rimMesh1, data: null, radius: planetRadius, isRim: true });
 
     const rimMat2 = new THREE.MeshBasicMaterial({
-      color: 0xffddaa,
-      transparent: true,
-      opacity: 0.5,
-      side: THREE.DoubleSide,
-      clippingPlanes: [this._semiClipX],
+      color: 0xffddaa, transparent: true, opacity: 0.5,
+      side: THREE.DoubleSide, clippingPlanes: [this._semiClipX],
     });
     const rimMesh2 = new THREE.Mesh(rimGeo.clone(), rimMat2);
     rimMesh2.rotation.x = -Math.PI / 2;
@@ -570,51 +531,44 @@ export class CutawayRenderer {
     this.layerMeshes.push({ mesh: rimMesh2, data: null, radius: planetRadius, isRim: true });
   }
 
-  /** Create 3D text labels positioned along the cutaway face for on-planet mode */
-  _create3DLabels(layers, maxR, planetRadius) {
-    this._3dLabelSprites = [];
-    for (let i = 0; i < layers.length; i++) {
-      const layer = layers[i];
-      const r = (layer.r / maxR) * planetRadius;
-      // Position labels along the X-cut face (at x=0, varying z based on layer radius)
-      const labelText = t(layer.key);
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = 256;
-      canvas.height = 48;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.font = 'bold 24px "Inter", sans-serif';
-      ctx.fillStyle = '#ffffff';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      // Subtle text shadow for readability
-      ctx.shadowColor = 'rgba(0,0,0,0.8)';
-      ctx.shadowBlur = 4;
-      ctx.fillText(labelText, 4, 24);
+  _animate() {
+    if (this._disposed) return;
 
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.needsUpdate = true;
-      const spriteMat = new THREE.SpriteMaterial({
-        map: texture,
-        transparent: true,
-        opacity: 0,
-        depthTest: false,
-      });
-      const sprite = new THREE.Sprite(spriteMat);
-      // Position between this layer and the next (midpoint radially)
-      const nextR = i < layers.length - 1 ? (layers[i + 1].r / maxR) * planetRadius : 0;
-      const midR = (r + nextR) / 2;
-      // Place on the exposed X-cut face, offset slightly into +X
-      sprite.position.set(0.05, 0, -midR);
-      const spriteScale = planetRadius * 0.35;
-      sprite.scale.set(spriteScale, spriteScale * 0.19, 1);
-      this.planetMesh.add(sprite);
-      this._3dLabelSprites.push(sprite);
-      this.layerMeshes.push({ mesh: sprite, data: null, radius: 0, isLabel: true });
+    const now = performance.now();
+    const elapsed = now - this._startTime;
+    const duration = 4000; // 4s smooth reveal
+    const progress = Math.min(elapsed / duration, 1);
+
+    // Smooth ease-out curve (fast start, gentle settle)
+    const eased = 1 - Math.pow(1 - progress, 3);
+
+    // Transform all clip planes to world space tracking planet's current matrix
+    // animOffset goes from 1 (nothing clipped) to 0 (full wedge open)
+    this._updateClipPlanes(1 - eased);
+
+    // Animate core light intensity
+    if (this._coreLight && this._animationComplete) {
+      this._coreLight.intensity = 3.0 + Math.sin(elapsed * 0.001) * 0.5;
     }
+
+    // Update shader time for animated textures
+    const time = elapsed * 0.001;
+    if (this._faceMaterial1 && this._faceMaterial1.uniforms) {
+      this._faceMaterial1.uniforms.time.value = time;
+    }
+    if (this._faceMaterial2 && this._faceMaterial2.uniforms) {
+      this._faceMaterial2.uniforms.time.value = time;
+    }
+
+    if (progress >= 1 && !this._animationComplete) {
+      this._animationComplete = true;
+    }
+
+    this._animationId = requestAnimationFrame(() => this._animate());
   }
 
-  /** Legacy mode: self-contained mini-renderer (fallback for panel-based display) */
+  // ==================== Legacy Mode ====================
+
   _initLegacy(layers) {
     const width = this.container.clientWidth || 300;
     const height = 250;
@@ -636,7 +590,8 @@ export class CutawayRenderer {
     this._legacyControls.dampingFactor = 0.08;
     this._legacyControls.enableZoom = false;
     this._legacyControls.enablePan = false;
-    this._legacyControls.enabled = false;
+    this._legacyControls.autoRotate = true;
+    this._legacyControls.autoRotateSpeed = 1.5;
 
     const ambient = new THREE.AmbientLight(0xffffff, 0.6);
     this._legacyScene.add(ambient);
@@ -648,6 +603,7 @@ export class CutawayRenderer {
     const legacyRadius = 1.0;
     const offset = legacyRadius * 1.1;
 
+    // Legacy uses fixed clip planes (scene doesn't move)
     this.clipPlane1 = new THREE.Plane(new THREE.Vector3(-1, 0, 0), offset);
     this.clipPlane2 = new THREE.Plane(new THREE.Vector3(0, 0, -1), offset);
     const clipPlanes = [this.clipPlane1, this.clipPlane2];
@@ -668,7 +624,7 @@ export class CutawayRenderer {
       this.layerMeshes.push({ mesh, data: layer, radius });
     }
 
-    // Semi-circle clip planes (legacy at origin)
+    // Semi-circle clip planes (legacy at origin, fixed)
     this._semiClipZ = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
     this._semiClipX = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0);
 
@@ -701,15 +657,12 @@ export class CutawayRenderer {
     this._coreLight = new THREE.PointLight(coreColor, 3.0, legacyRadius * 2.5, 1.5);
     this._legacyScene.add(this._coreLight);
 
-    // Two rim rings
+    // Rim rings
     const rimGeo = new THREE.RingGeometry(legacyRadius * 0.995, legacyRadius, 64, 1);
 
     const rimMat1 = new THREE.MeshBasicMaterial({
-      color: 0xffddaa,
-      transparent: true,
-      opacity: 0.5,
-      side: THREE.DoubleSide,
-      clippingPlanes: [this._semiClipZ],
+      color: 0xffddaa, transparent: true, opacity: 0.5,
+      side: THREE.DoubleSide, clippingPlanes: [this._semiClipZ],
     });
     const rimMesh1 = new THREE.Mesh(rimGeo.clone(), rimMat1);
     rimMesh1.rotation.y = Math.PI / 2;
@@ -718,11 +671,8 @@ export class CutawayRenderer {
     this.layerMeshes.push({ mesh: rimMesh1, data: null, radius: legacyRadius, isRim: true });
 
     const rimMat2 = new THREE.MeshBasicMaterial({
-      color: 0xffddaa,
-      transparent: true,
-      opacity: 0.5,
-      side: THREE.DoubleSide,
-      clippingPlanes: [this._semiClipX],
+      color: 0xffddaa, transparent: true, opacity: 0.5,
+      side: THREE.DoubleSide, clippingPlanes: [this._semiClipX],
     });
     const rimMesh2 = new THREE.Mesh(rimGeo.clone(), rimMat2);
     rimMesh2.rotation.x = -Math.PI / 2;
@@ -755,91 +705,15 @@ export class CutawayRenderer {
     this.container.appendChild(labelContainer);
   }
 
-  _animate() {
-    if (this._disposed) return;
-
-    const now = performance.now();
-    const elapsed = now - this._startTime;
-    const duration = 6000; // 6 seconds for dramatic reveal
-    const progress = Math.min(elapsed / duration, 1);
-
-    const p = progress;
-    const eased = p < 0.5
-      ? 4 * p * p * p
-      : 1 - Math.pow(-2 * p + 2, 3) / 2;
-
-    // Track planet's current world position
-    this.planetMesh.getWorldPosition(this._worldPos);
-    const wx = this._worldPos.x;
-    const wz = this._worldPos.z;
-
-    const maxRadius = this._getMaxRadius();
-    const offset = maxRadius * 1.1;
-    if (this.clipPlane1 && this.clipPlane2) {
-      this.clipPlane1.constant = wx + offset * (1 - eased);
-      this.clipPlane2.constant = wz + offset * (1 - eased);
-    }
-
-    // Update semi-circle clip planes
-    if (this._semiClipZ) this._semiClipZ.constant = wz;
-    if (this._semiClipX) this._semiClipX.constant = wx;
-
-    // Subtle planet rotation during reveal, continues slowly after completion
-    if (this.planetMesh) {
-      if (progress < 1) {
-        this.planetMesh.rotation.y += 0.002 * (1 - progress);
-      } else {
-        // Gentle post-reveal rotation to showcase 3D depth
-        this.planetMesh.rotation.y += 0.001;
-      }
-    }
-
-    // Animate core light intensity for cinematic pulsing
-    if (this._coreLight && this._animationComplete) {
-      this._coreLight.intensity = 3.0 + Math.sin(elapsed * 0.001) * 0.5;
-    }
-
-    // Update shader time
-    const time = elapsed * 0.001;
-    if (this._faceMaterial1 && this._faceMaterial1.uniforms) {
-      this._faceMaterial1.uniforms.time.value = time;
-    }
-    if (this._faceMaterial2 && this._faceMaterial2.uniforms) {
-      this._faceMaterial2.uniforms.time.value = time;
-    }
-
-    // Progressive label reveal — stagger labels as layers are exposed
-    if (this._3dLabelSprites && this._3dLabelSprites.length > 0) {
-      for (let i = 0; i < this._3dLabelSprites.length; i++) {
-        const threshold = (i + 0.5) / this._3dLabelSprites.length;
-        const sprite = this._3dLabelSprites[i];
-        if (eased >= threshold) {
-          // Fade in over 0.3s
-          const labelAge = (eased - threshold) / 0.15;
-          sprite.material.opacity = Math.min(1, labelAge);
-        }
-      }
-    }
-
-    if (progress >= 1 && !this._animationComplete) {
-      this._animationComplete = true;
-    }
-
-    this._animationId = requestAnimationFrame(() => this._animate());
-  }
-
   _animateLegacy() {
     if (this._disposed) return;
 
     const now = performance.now();
     const elapsed = now - this._startTime;
-    const duration = 6000;
+    const duration = 4000;
     const progress = Math.min(elapsed / duration, 1);
 
-    const p = progress;
-    const eased = p < 0.5
-      ? 4 * p * p * p
-      : 1 - Math.pow(-2 * p + 2, 3) / 2;
+    const eased = 1 - Math.pow(1 - progress, 3);
 
     const offset = 1.1;
     if (this.clipPlane1 && this.clipPlane2) {
@@ -853,12 +727,6 @@ export class CutawayRenderer {
       if (eased >= threshold) {
         this._labelElements[i].style.opacity = '1';
       }
-    }
-
-    if (!this._animationComplete) {
-      this._legacyScene.rotation.y += 0.001;
-    } else {
-      this._legacyScene.rotation.y += 0.004;
     }
 
     // Core light pulsing
@@ -879,7 +747,6 @@ export class CutawayRenderer {
 
     if (progress >= 1 && !this._animationComplete) {
       this._animationComplete = true;
-      if (this._legacyControls) this._legacyControls.enabled = true;
     }
 
     this._animationId = requestAnimationFrame(() => this._animateLegacy());
@@ -927,18 +794,16 @@ export class CutawayRenderer {
       if (l.isLight) {
         if (l.mesh.parent) l.mesh.parent.remove(l.mesh);
         l.mesh.dispose();
-      } else if (l.isLabel) {
-        if (l.mesh.parent) l.mesh.parent.remove(l.mesh);
-        if (l.mesh.material && l.mesh.material.map) l.mesh.material.map.dispose();
-        if (l.mesh.material) l.mesh.material.dispose();
       } else {
         if (l.mesh.parent) l.mesh.parent.remove(l.mesh);
         if (l.mesh.geometry) l.mesh.geometry.dispose();
-        if (l.mesh.material) l.mesh.material.dispose();
+        if (l.mesh.material) {
+          if (l.mesh.material.map) l.mesh.material.map.dispose();
+          l.mesh.material.dispose();
+        }
       }
     }
     this.layerMeshes = [];
-    this._3dLabelSprites = null;
 
     if (this.mainRenderer) {
       this.mainRenderer.localClippingEnabled = false;
@@ -962,5 +827,9 @@ export class CutawayRenderer {
     this.clipPlane2 = null;
     this._semiClipZ = null;
     this._semiClipX = null;
+    this._localClip1 = null;
+    this._localClip2 = null;
+    this._localSemiZ = null;
+    this._localSemiX = null;
   }
 }
