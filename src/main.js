@@ -1868,7 +1868,18 @@ canvasContainer.addEventListener('touchend', (e) => {
 function handleInitialHash() {
   const hash = window.location.hash.replace('#', '');
   if (hash && (SOLAR_SYSTEM[hash] || DWARF_PLANETS[hash] || ASTEROIDS[hash])) {
-    openInfoPanel(hash);
+    // Defer hash navigation until cinematic sweep completes so the
+    // Earth → overview opening isn't interrupted
+    if (scene && scene._cinematicSweepActive) {
+      const check = setInterval(() => {
+        if (!scene._cinematicSweepActive) {
+          clearInterval(check);
+          openInfoPanel(hash);
+        }
+      }, 500);
+    } else {
+      openInfoPanel(hash);
+    }
   }
 }
 
