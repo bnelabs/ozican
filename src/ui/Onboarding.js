@@ -2,27 +2,30 @@
  * Lightweight onboarding tooltip system.
  * Shows a 4-step guided tour on first visit.
  */
+import { t } from '../i18n/i18n.js';
 
-const STORAGE_KEY = 'ozican-onboarding-done';
+const STORAGE_KEY = 'ozmos-onboarding-done';
 
-const STEPS = [
-  {
-    target: '#canvas-container',
-    text: 'Click any planet to explore it in detail. Scroll to zoom in and out.',
-  },
-  {
-    target: '#planet-bar',
-    text: 'Jump to any planet quickly using this selector bar.',
-  },
-  {
-    target: '#btn-compare',
-    text: 'Compare all planets side by side with detailed stats.',
-  },
-  {
-    target: '#btn-speed',
-    text: 'Control animation speed here. Press Space to pause.',
-  },
-];
+function getSteps() {
+  return [
+    {
+      target: '#canvas-container',
+      text: t('onboarding.step1'),
+    },
+    {
+      target: '#planet-bar',
+      text: t('onboarding.step2'),
+    },
+    {
+      target: '#btn-compare',
+      text: t('onboarding.step3'),
+    },
+    {
+      target: '#btn-speed',
+      text: t('onboarding.step4'),
+    },
+  ];
+}
 
 let currentStep = 0;
 let overlay = null;
@@ -69,7 +72,8 @@ function positionTooltip(targetRect) {
 }
 
 function showStep() {
-  const step = STEPS[currentStep];
+  const steps = getSteps();
+  const step = steps[currentStep];
   const targetEl = document.querySelector(step.target);
   if (!targetEl) {
     finish();
@@ -105,20 +109,21 @@ function showStep() {
     document.body.appendChild(tooltipEl);
   }
 
+  const isLast = currentStep >= steps.length - 1;
   tooltipEl.innerHTML = `
     <p>${step.text}</p>
     <div class="onboarding-footer">
-      <span class="onboarding-steps">${currentStep + 1} / ${STEPS.length}</span>
+      <span class="onboarding-steps">${currentStep + 1} / ${steps.length}</span>
       <div class="onboarding-actions">
-        <button class="onboarding-skip">Skip</button>
-        <button class="onboarding-next">${currentStep < STEPS.length - 1 ? 'Next' : 'Done'}</button>
+        <button class="onboarding-skip">${t('onboarding.skip')}</button>
+        <button class="onboarding-next">${isLast ? t('onboarding.done') : t('onboarding.next')}</button>
       </div>
     </div>
   `;
 
   tooltipEl.querySelector('.onboarding-skip').addEventListener('click', finish);
   tooltipEl.querySelector('.onboarding-next').addEventListener('click', () => {
-    if (currentStep < STEPS.length - 1) {
+    if (currentStep < steps.length - 1) {
       currentStep++;
       showStep();
     } else {

@@ -1,5 +1,5 @@
 /**
- * Comprehensive solar system data for the Ozican astronomy app.
+ * Comprehensive solar system data for the OzMos astronomy app.
  * All distances in AU, sizes relative to Earth radius, masses relative to Earth mass.
  * Orbital periods in Earth days.
  */

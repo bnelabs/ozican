@@ -1,10 +1,52 @@
 /**
  * Generates HTML content for planet/moon info panels.
  */
-import { SOLAR_SYSTEM } from '../data/solarSystem.js';
+import { getLocalizedPlanet } from '../i18n/localizedData.js';
+import { t } from '../i18n/i18n.js';
+import { PLANET_LAYERS } from '../data/planetLayers.js';
+
+/**
+ * Compact planet summary — shows only name, type, and 3-4 key stats.
+ * Always visible, never covers more than ~40% of screen.
+ */
+export function renderCompactPlanetInfo(key) {
+  const data = getLocalizedPlanet(key);
+  if (!data) return '';
+
+  let stats = '';
+  if (key === 'sun') {
+    stats += compactStat(t('stat.surfaceTemp'), data.temperature);
+    stats += compactStat(t('stat.mass'), data.mass);
+    stats += compactStat(t('stat.age'), data.age);
+    stats += compactStat(t('stat.luminosity'), data.luminosity);
+  } else {
+    stats += compactStat(t('stat.mass'), `${data.massEarths} ${t('unit.earthMass')}`);
+    stats += compactStat(t('stat.temperature'), data.temperature);
+    stats += compactStat(t('stat.distance'), data.distanceFromSun);
+    stats += compactStat(t('stat.gravity'), data.gravity);
+  }
+
+  return `
+    <div class="info-compact">
+      <div class="info-compact-header">
+        <h1>${data.name}</h1>
+        <span class="subtitle">${data.type}</span>
+      </div>
+      <div class="info-compact-stats">${stats}</div>
+      <button class="info-toggle-btn" id="info-show-more">${t('info.showMore') || 'Show more'} &#x25BC;</button>
+    </div>`;
+}
+
+function compactStat(label, value) {
+  return `
+    <div class="info-compact-stat">
+      <div class="label">${label}</div>
+      <div class="value">${value}</div>
+    </div>`;
+}
 
 export function renderPlanetInfo(key) {
-  const data = SOLAR_SYSTEM[key];
+  const data = getLocalizedPlanet(key);
   if (!data) return '';
 
   let html = '';
@@ -23,23 +65,23 @@ export function renderPlanetInfo(key) {
 
   // Quick Stats
   html += `<div class="info-section fade-in">
-    <h3>Quick Facts</h3>
+    <h3>${t('info.quickFacts')}</h3>
     <div class="info-grid">`;
 
   if (key === 'sun') {
-    html += stat('Mass', data.mass);
-    html += stat('Surface Temp', data.temperature);
-    html += stat('Core Temp', data.coreTemperature);
-    html += stat('Luminosity', data.luminosity);
-    html += stat('Age', data.age);
-    html += stat('Spectral Class', data.spectralClass);
+    html += stat(t('stat.mass'), data.mass);
+    html += stat(t('stat.surfaceTemp'), data.temperature);
+    html += stat(t('stat.coreTemp'), data.coreTemperature);
+    html += stat(t('stat.luminosity'), data.luminosity);
+    html += stat(t('stat.age'), data.age);
+    html += stat(t('stat.spectralClass'), data.spectralClass);
   } else {
-    html += stat('Mass', `${data.massEarths} <span class="unit">× Earth</span>`);
-    html += stat('Gravity', data.gravity);
-    html += stat('Temperature', data.temperature);
-    html += stat('Day Length', data.dayLength);
-    html += stat('Year', data.orbitalPeriod);
-    html += stat('Distance', data.distanceFromSun);
+    html += stat(t('stat.mass'), `${data.massEarths} <span class="unit">${t('unit.earthMass')}</span>`);
+    html += stat(t('stat.gravity'), data.gravity);
+    html += stat(t('stat.temperature'), data.temperature);
+    html += stat(t('stat.dayLength'), data.dayLength);
+    html += stat(t('stat.year'), data.orbitalPeriod);
+    html += stat(t('stat.distance'), data.distanceFromSun);
   }
 
   html += `</div></div>`;
@@ -47,10 +89,10 @@ export function renderPlanetInfo(key) {
   // Physical Attributes
   if (data.physicalAttributes) {
     html += `<div class="info-section fade-in">
-      <h3>Physical Attributes</h3>
+      <h3>${t('info.physicalAttributes')}</h3>
       <div class="info-grid">`;
     for (const [label, value] of Object.entries(data.physicalAttributes)) {
-      html += stat(formatLabel(label), value);
+      html += stat(t('attr.' + label), value);
     }
     html += `</div></div>`;
   }
@@ -58,9 +100,9 @@ export function renderPlanetInfo(key) {
   // Atmosphere
   if (data.atmosphere) {
     html += `<div class="info-section fade-in">
-      <h3>Atmosphere</h3>
+      <h3>${t('info.atmosphere')}</h3>
       <div class="info-grid">
-        ${stat('Composition', data.atmosphere, true)}
+        ${stat(t('info.atmosphere'), data.atmosphere, true)}
       </div>
     </div>`;
   }
@@ -68,10 +110,10 @@ export function renderPlanetInfo(key) {
   // Composition (Sun)
   if (data.composition) {
     html += `<div class="info-section fade-in">
-      <h3>Composition</h3>
+      <h3>${t('info.composition')}</h3>
       <div class="info-grid">`;
     for (const [element, percentage] of Object.entries(data.composition)) {
-      html += stat(capitalize(element), percentage);
+      html += stat(t('attr.' + element), percentage);
     }
     html += `</div></div>`;
   }
@@ -79,7 +121,7 @@ export function renderPlanetInfo(key) {
   // Minerals
   if (data.minerals && data.minerals.length > 0) {
     html += `<div class="info-section fade-in">
-      <h3>Key Minerals & Elements</h3>
+      <h3>${t('info.minerals')}</h3>
       <div class="mineral-tags">`;
     for (const mineral of data.minerals) {
       html += `<span class="mineral-tag">${mineral}</span>`;
@@ -90,10 +132,10 @@ export function renderPlanetInfo(key) {
   // Astrophysics
   if (data.astrophysics) {
     html += `<div class="info-section fade-in">
-      <h3>Astrophysical Data</h3>
+      <h3>${t('info.astrophysics')}</h3>
       <div class="info-grid">`;
     for (const [label, value] of Object.entries(data.astrophysics)) {
-      html += stat(formatLabel(label), value);
+      html += stat(t('attr.' + label), value);
     }
     html += `</div></div>`;
   }
@@ -101,15 +143,23 @@ export function renderPlanetInfo(key) {
   // Geology
   if (data.geology) {
     html += `<div class="info-section fade-in">
-      <h3>Geology & Surface</h3>
+      <h3>${t('info.geology')}</h3>
       <div class="info-description"><p>${data.geology}</p></div>
     </div>`;
   }
 
+  // Internal structure cutaway (3D renderer)
+  html += `<div class="info-section fade-in">
+    <button class="cutaway-toggle" id="cutaway-btn" data-planet="${key}">
+      ${t('cutaway.show')}
+    </button>
+    <div id="cutaway-container" style="display:none;"></div>
+  </div>`;
+
   // Description
   if (data.description) {
     html += `<div class="info-section fade-in">
-      <h3>About</h3>
+      <h3>${t('info.about')}</h3>
       <div class="info-description">`;
     for (const para of data.description) {
       html += `<p>${para}</p>`;
@@ -120,7 +170,7 @@ export function renderPlanetInfo(key) {
   // Fun Facts
   if (data.funFacts && data.funFacts.length > 0) {
     html += `<div class="info-section fade-in">
-      <h3>Interesting Facts</h3>
+      <h3>${t('info.funFacts')}</h3>
       <div class="info-description">`;
     for (const fact of data.funFacts) {
       html += `<p>&#x2022; ${fact}</p>`;
@@ -131,7 +181,7 @@ export function renderPlanetInfo(key) {
   // Moons
   if (data.moons && data.moons.length > 0) {
     html += `<div class="info-section fade-in">
-      <h3>Moons (${data.moons.length})</h3>
+      <h3>${t('info.moons')} (${data.moons.length})</h3>
       <div class="moon-list">`;
     for (let i = 0; i < data.moons.length; i++) {
       const moon = data.moons[i];
@@ -149,7 +199,7 @@ export function renderPlanetInfo(key) {
 }
 
 export function renderMoonInfo(planetKey, moonIndex) {
-  const planet = SOLAR_SYSTEM[planetKey];
+  const planet = getLocalizedPlanet(planetKey);
   if (!planet || !planet.moons[moonIndex]) return '';
 
   const moon = planet.moons[moonIndex];
@@ -157,32 +207,43 @@ export function renderMoonInfo(planetKey, moonIndex) {
 
   html += `
     <div class="info-header fade-in">
-      <div class="subtitle">Moon of ${planet.name}</div>
+      <div class="subtitle">${t('moon.of')} ${planet.name}</div>
       <h1>${moon.name}</h1>
     </div>
   `;
 
   html += `<div class="info-section fade-in">
-    <h3>Quick Facts</h3>
+    <h3>${t('info.quickFacts')}</h3>
     <div class="info-grid">
-      ${stat('Diameter', moon.diameter)}
-      ${stat('Orbital Period', moon.orbitalPeriod)}
+      ${stat(t('stat.diameter'), moon.diameter)}
+      ${stat(t('stat.orbitalPeriod'), moon.orbitalPeriod)}
     </div>
   </div>`;
 
   html += `<div class="info-section fade-in">
-    <h3>Description</h3>
+    <h3>${t('moon.description')}</h3>
     <div class="info-description"><p>${moon.description}</p></div>
   </div>`;
 
   if (moon.minerals && moon.minerals.length > 0) {
     html += `<div class="info-section fade-in">
-      <h3>Key Minerals</h3>
+      <h3>${t('moon.keyMinerals')}</h3>
       <div class="mineral-tags">`;
     for (const mineral of moon.minerals) {
       html += `<span class="mineral-tag">${mineral}</span>`;
     }
     html += `</div></div>`;
+  }
+
+  // Cross-section for moons with layer data
+  const moonLayerKey = `${planetKey}_moon_${moonIndex}`;
+  if (PLANET_LAYERS[moonLayerKey]) {
+    html += `<div class="info-section fade-in">
+      <button class="cutaway-toggle" id="cutaway-btn" data-planet="${moonLayerKey}">
+        ${t('cutaway.show')}
+      </button>
+      <div id="cutaway-container" style="display:none;"></div>
+    </div>`;
   }
 
   // Moon prev/next navigation
@@ -194,10 +255,10 @@ export function renderMoonInfo(planetKey, moonIndex) {
       <div class="info-section">
         <div class="moon-nav">
           <button class="nav-btn" id="moon-prev" ${!prevName ? 'disabled' : ''}>
-            &larr; ${prevName || 'Prev'}
+            &larr; ${prevName || t('moon.prev')}
           </button>
           <button class="nav-btn" id="moon-next" ${!nextName ? 'disabled' : ''}>
-            ${nextName || 'Next'} &rarr;
+            ${nextName || t('moon.next')} &rarr;
           </button>
         </div>
       </div>`;
@@ -208,7 +269,7 @@ export function renderMoonInfo(planetKey, moonIndex) {
     <div class="info-section">
       <button class="nav-btn" id="back-to-planet" data-planet="${planetKey}"
         style="width: 100%; text-align: center; padding: 10px;">
-        &larr; Back to ${planet.name}
+        &larr; ${t('moon.backTo')} ${planet.name}
       </button>
     </div>`;
 
@@ -223,13 +284,3 @@ function stat(label, value, fullWidth = false) {
     </div>`;
 }
 
-function formatLabel(camelCase) {
-  return camelCase
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, s => s.toUpperCase())
-    .trim();
-}
-
-function capitalize(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
-}

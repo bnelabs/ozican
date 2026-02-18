@@ -13,7 +13,7 @@ function seededRandom(seed) {
 }
 
 /** 2D Perlin-style noise */
-function createNoiseGenerator(seed) {
+export function createNoiseGenerator(seed) {
   const rand = seededRandom(seed);
   const perm = new Array(512);
   const p = new Array(256);
@@ -51,7 +51,7 @@ function createNoiseGenerator(seed) {
 }
 
 /** Multi-octave fractal noise */
-function fbm(noise, x, y, octaves = 6, persistence = 0.5, lacunarity = 2.0) {
+export function fbm(noise, x, y, octaves = 6, persistence = 0.5, lacunarity = 2.0) {
   let value = 0;
   let amplitude = 1.0;
   let frequency = 1.0;
@@ -561,7 +561,7 @@ export function generateMoonTexture(size = 512, seed = 1234) {
 }
 
 /** Generate a starfield background */
-export function generateStarfield(size = 2048) {
+export function generateStarfield(size = 4096) {
   const { canvas, ctx } = createCanvas(size, size);
   const rand = seededRandom(12345);
 
@@ -569,8 +569,8 @@ export function generateStarfield(size = 2048) {
   ctx.fillStyle = '#000005';
   ctx.fillRect(0, 0, size, size);
 
-  // Dense star field
-  const starCount = 8000;
+  // Dense star field — 15K stars for 4K
+  const starCount = Math.round(15000 * (size / 4096));
   for (let i = 0; i < starCount; i++) {
     const x = rand() * size;
     const y = rand() * size;
@@ -581,25 +581,20 @@ export function generateStarfield(size = 2048) {
     let r, g, b;
     const colorRand = rand();
     if (colorRand < 0.6) {
-      // White
       r = g = b = 200 + rand() * 55;
     } else if (colorRand < 0.75) {
-      // Blue-white (hot stars)
       r = 180 + rand() * 40;
       g = 190 + rand() * 50;
       b = 230 + rand() * 25;
     } else if (colorRand < 0.85) {
-      // Yellow
       r = 230 + rand() * 25;
       g = 210 + rand() * 30;
       b = 160 + rand() * 40;
     } else if (colorRand < 0.92) {
-      // Orange
       r = 230 + rand() * 25;
       g = 170 + rand() * 40;
       b = 120 + rand() * 40;
     } else {
-      // Red
       r = 220 + rand() * 35;
       g = 140 + rand() * 40;
       b = 120 + rand() * 30;
@@ -623,27 +618,209 @@ export function generateStarfield(size = 2048) {
     }
   }
 
-  // Add subtle nebula/milky way band
+  // Multi-color nebula / Milky Way band with dark dust lanes
   const noise = createNoiseGenerator(9999);
+  const noise2 = createNoiseGenerator(8888);
   const nebulaData = ctx.getImageData(0, 0, size, size);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const nx = x / size * 3;
       const ny = y / size * 3;
-      const n = fbm(noise, nx, ny, 4, 0.5, 2.0) * 0.5 + 0.5;
+      const n = fbm(noise, nx, ny, 6, 0.5, 2.0) * 0.5 + 0.5;
       const band = Math.exp(-Math.pow((y / size - 0.5) * 4, 2));
 
-      if (n > 0.5 && band > 0.3) {
-        const intensity = (n - 0.5) * 2 * band * 12;
+      // Dark dust lanes using second noise
+      const dust = fbm(noise2, nx * 2, ny * 2, 4, 0.55, 2.0) * 0.5 + 0.5;
+      const dustMask = dust > 0.55 ? 1.0 - (dust - 0.55) * 3 : 1.0;
+
+      if (n > 0.45 && band > 0.2) {
+        const intensity = (n - 0.45) * 2 * band * 14 * Math.max(0.1, dustMask);
         const i = (y * size + x) * 4;
-        nebulaData.data[i] += intensity * 0.3;
-        nebulaData.data[i + 1] += intensity * 0.2;
-        nebulaData.data[i + 2] += intensity * 0.8;
+        // Multi-color: blue core, purple/pink edges, hints of gold
+        const bandPos = (y / size - 0.5) * 4;
+        const colorShift = Math.abs(bandPos);
+        nebulaData.data[i] += intensity * (0.25 + colorShift * 0.4);     // red: more at edges
+        nebulaData.data[i + 1] += intensity * (0.15 + colorShift * 0.1); // green: subtle
+        nebulaData.data[i + 2] += intensity * (0.8 - colorShift * 0.2);  // blue: strongest at center
       }
     }
   }
   ctx.putImageData(nebulaData, 0, 0);
 
+  return canvas;
+}
+
+/** Generate a procedural bump map for rocky planets */
+export function generateBumpMap(size = 1024, seed = 42, options = {}) {
+  const { octaves = 6, frequency = 8, craterStrength = 0.4 } = options;
+  const { canvas, ctx } = createCanvas(size, size / 2);
+  const imageData = ctx.createImageData(size, size / 2);
+  const data = imageData.data;
+  const noise = createNoiseGenerator(seed);
+  const craterNoise = createNoiseGenerator(seed + 100);
+
+  for (let y = 0; y < size / 2; y++) {
+    for (let x = 0; x < size; x++) {
+      const nx = x / size * frequency;
+      const ny = y / (size / 2) * (frequency / 2);
+
+      // Base terrain height
+      let h = fbm(noise, nx, ny, octaves, 0.55, 2.0) * 0.5 + 0.5;
+
+      // Crater layer
+      const crater = fbm(craterNoise, nx * 3, ny * 3, 4, 0.6, 2.2);
+      h -= Math.max(0, -crater) * craterStrength;
+
+      h = clamp(h, 0, 1);
+      const v = Math.floor(h * 255);
+      const i = (y * size + x) * 4;
+      data[i] = v;
+      data[i + 1] = v;
+      data[i + 2] = v;
+      data[i + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
+/** Generate per-pixel roughness map for Earth */
+export function generateEarthRoughnessMap(size = 1024) {
+  const { canvas, ctx } = createCanvas(size, size / 2);
+  const imageData = ctx.createImageData(size, size / 2);
+  const data = imageData.data;
+  const noise = createNoiseGenerator(7); // same seed as Earth texture for continent alignment
+
+  for (let y = 0; y < size / 2; y++) {
+    for (let x = 0; x < size; x++) {
+      const nx = x / size * 8;
+      const ny = y / (size / 2) * 4;
+      const lat = Math.abs(y / (size / 2) - 0.5) * 2;
+
+      const continent = fbm(noise, nx, ny, 7, 0.55, 2.0);
+      const isLand = continent > 0.05;
+      const isPolar = lat > 0.75;
+
+      let roughness;
+      if (isPolar) {
+        roughness = 0.5; // ice: medium roughness
+      } else if (isLand) {
+        roughness = 0.8; // land: rough
+      } else {
+        roughness = 0.15; // ocean: smooth/specular
+      }
+
+      // Smooth transitions
+      if (lat > 0.65 && lat <= 0.75) {
+        const blend = (lat - 0.65) / 0.1;
+        roughness = roughness * (1 - blend) + 0.5 * blend;
+      }
+
+      const v = Math.floor(roughness * 255);
+      const i = (y * size + x) * 4;
+      data[i] = v;
+      data[i + 1] = v;
+      data[i + 2] = v;
+      data[i + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
+/** Generate per-pixel roughness map for Mars */
+export function generateMarsRoughnessMap(size = 1024) {
+  const { canvas, ctx } = createCanvas(size, size / 2);
+  const imageData = ctx.createImageData(size, size / 2);
+  const data = imageData.data;
+  const noise = createNoiseGenerator(444); // same seed as Mars texture
+
+  for (let y = 0; y < size / 2; y++) {
+    for (let x = 0; x < size; x++) {
+      const nx = x / size * 8;
+      const ny = y / (size / 2) * 4;
+      const lat = Math.abs(y / (size / 2) - 0.5) * 2;
+
+      const darkRegions = fbm(noise, nx * 0.8 + 500, ny * 0.8 + 500, 3, 0.5, 2.0);
+      const isVolcanic = darkRegions < -0.2;
+      const isPolar = lat > 0.82;
+
+      let roughness;
+      if (isPolar) {
+        roughness = 0.4; // ice caps
+      } else if (isVolcanic) {
+        roughness = 0.6; // volcanic dark regions
+      } else {
+        roughness = 0.85; // general terrain
+      }
+
+      const v = Math.floor(roughness * 255);
+      const i = (y * size + x) * 4;
+      data[i] = v;
+      data[i + 1] = v;
+      data[i + 2] = v;
+      data[i + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
+/** Generate Earth city lights texture (population-density clusters) */
+export function generateEarthCityLights(size = 1024) {
+  const { canvas, ctx } = createCanvas(size, size / 2);
+  const imageData = ctx.createImageData(size, size / 2);
+  const data = imageData.data;
+  const continentNoise = createNoiseGenerator(7); // matches Earth texture
+  const cityNoise = createNoiseGenerator(2222);
+  const clusterNoise = createNoiseGenerator(3333);
+
+  for (let y = 0; y < size / 2; y++) {
+    for (let x = 0; x < size; x++) {
+      const nx = x / size * 8;
+      const ny = y / (size / 2) * 4;
+      const lat = Math.abs(y / (size / 2) - 0.5) * 2;
+
+      // Only on land
+      const continent = fbm(continentNoise, nx, ny, 7, 0.55, 2.0);
+      const isLand = continent > 0.05;
+
+      if (!isLand || lat > 0.75) {
+        const i = (y * size + x) * 4;
+        data[i] = data[i + 1] = data[i + 2] = 0;
+        data[i + 3] = 255;
+        continue;
+      }
+
+      // Mid-latitude concentration (most cities 20-60 degrees)
+      const latWeight = Math.exp(-Math.pow((lat - 0.4) * 3, 2));
+
+      // Coastal bias: land near ocean boundaries is brighter
+      const coastDist = Math.max(0, 1.0 - (continent - 0.05) * 5);
+      const coastBias = 1.0 + coastDist * 1.5;
+
+      // City clusters
+      const cluster = fbm(clusterNoise, nx * 4, ny * 4, 4, 0.5, 2.0) * 0.5 + 0.5;
+      const detail = fbm(cityNoise, nx * 12, ny * 12, 3, 0.4, 2.0) * 0.5 + 0.5;
+
+      let brightness = cluster * detail * latWeight * coastBias;
+      // Threshold: only show above certain density
+      brightness = brightness > 0.35 ? Math.pow((brightness - 0.35) / 0.65, 1.5) : 0;
+      brightness = clamp(brightness, 0, 1);
+
+      // Warm yellow-orange city light color
+      const i = (y * size + x) * 4;
+      data[i] = Math.floor(brightness * 255);       // R
+      data[i + 1] = Math.floor(brightness * 200);   // G (warm)
+      data[i + 2] = Math.floor(brightness * 100);   // B (warm)
+      data[i + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
   return canvas;
 }
 

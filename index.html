@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Ozican — Solar System Explorer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>OzMos — Solar System Explorer</title>
   <link rel="stylesheet" href="/src/styles/main.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 </head>
@@ -12,13 +12,49 @@
     <div id="canvas-container"></div>
   </main>
 
+  <!-- Dedication screen (first visit) -->
+  <div id="dedication-screen" class="hidden">
+    <div class="dedication-bg"></div>
+    <div class="dedication-content">
+      <h2 class="dedication-heading">To the Infinite and the Intimate</h2>
+      <div class="dedication-text">
+        <p class="dedication-verse v1">To the Cosmos,<br>My first teacher of wonder;</p>
+        <p class="dedication-verse v2">Who taught me that to look up is to look back,<br>and to dream is to calculate the impossible.</p>
+        <p class="dedication-verse v3">To MT, my mother,<br>My first gravity;</p>
+        <p class="dedication-verse v4">The steady orbit that kept me grounded<br>while my heart was drifting toward the stars.</p>
+        <p class="dedication-verse v5">This journey through the light<br>is a tribute to the love of both:</p>
+        <p class="dedication-verse v6">One who gave me the universe to explore,<br>and one who gave me the home to return to.</p>
+      </div>
+      <div class="dedication-signature">— Ozan</div>
+    </div>
+    <button class="dedication-skip" id="dedication-skip">Skip</button>
+  </div>
+
+  <!-- Language picker (first visit) -->
+  <div id="lang-picker" class="hidden">
+    <div class="lang-picker-card">
+      <h1 class="lang-picker-title">OzMos</h1>
+      <p class="lang-picker-subtitle">Choose your language / Dilinizi seçin</p>
+      <div class="lang-picker-options">
+        <button class="lang-picker-btn" data-lang="en">
+          <span class="lang-flag">&#127468;&#127463;</span>
+          <span class="lang-label">English</span>
+        </button>
+        <button class="lang-picker-btn" data-lang="tr">
+          <span class="lang-flag">&#127481;&#127479;</span>
+          <span class="lang-label">Türkçe</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Loading screen -->
-  <div id="loading-screen">
+  <div id="loading-screen" class="hidden">
     <div class="loader">
       <div class="loader-ring"></div>
       <div class="loader-text">
-        <h1>Ozican</h1>
-        <p>Loading the Solar System...</p>
+        <h1>OzMos</h1>
+        <p data-i18n="loading.text">Loading the Solar System...</p>
         <div class="progress-bar">
           <div class="progress-fill" id="load-progress"></div>
         </div>
@@ -30,20 +66,89 @@
   <nav id="top-nav" aria-label="Main navigation">
     <div class="nav-brand">
       <span class="brand-icon">&#9788;</span>
-      <span class="brand-name">Ozican</span>
-      <span class="brand-tagline">Solar System Explorer</span>
+      <span class="brand-name">OzMos</span>
+      <span class="brand-subtitle">Where Ozan Meets the Cosmos</span>
+      <span class="brand-tagline" data-i18n="brand.tagline">Solar System Explorer</span>
     </div>
-    <div class="nav-controls">
-      <button id="btn-overview" class="nav-btn active" title="Solar System Overview" aria-label="Solar System Overview">Overview</button>
-      <button id="btn-compare" class="nav-btn" title="Compare Planets" aria-label="Compare Planets" aria-pressed="false">Compare</button>
-      <button id="btn-speed" class="nav-btn" title="Animation Speed" aria-label="Animation Speed: 1x">
-        Speed: <span id="speed-label">1x</span>
-      </button>
-      <button id="btn-orbits" class="nav-btn active" title="Toggle Orbit Lines" aria-label="Toggle Orbit Lines" aria-pressed="true">Orbits</button>
-      <button id="btn-labels" class="nav-btn active" title="Toggle Labels" aria-label="Toggle Labels" aria-pressed="true">Labels</button>
-      <button id="btn-fullscreen" class="nav-btn" title="Fullscreen" aria-label="Toggle Fullscreen">&#x26F6;</button>
+
+    <!-- Collapsible nav controls (hidden on mobile, inline on desktop) -->
+    <div class="nav-controls" id="nav-controls">
+      <div class="nav-group">
+        <button id="btn-overview" class="nav-btn active" title="Solar System Overview" aria-label="Solar System Overview" data-i18n="nav.overview">Overview</button>
+        <button id="btn-compare" class="nav-btn" title="Compare Planets" aria-label="Compare Planets" aria-pressed="false" data-i18n="nav.compare">Compare</button>
+        <button id="btn-missions" class="nav-btn" title="NASA Missions" aria-label="NASA Missions">
+          <span class="nav-icon">&#128640;</span> <span class="nav-btn-text" data-i18n="nav.missions">Missions</span>
+        </button>
+        <button id="btn-quiz" class="nav-btn" title="Astrophysics Quiz" aria-label="Astrophysics Quiz">
+          <span class="nav-icon">&#129504;</span> <span class="nav-btn-text" data-i18n="nav.quiz">Quiz</span>
+        </button>
+      </div>
+      <div class="nav-divider"></div>
+      <div class="nav-group">
+        <button id="btn-speed" class="nav-btn" title="Animation Speed" aria-label="Animation Speed: 1x">
+          <span data-i18n="nav.speed">Speed</span>: <span id="speed-label">1x</span>
+        </button>
+        <button id="btn-orbits" class="nav-btn active" title="Toggle Orbit Lines" aria-label="Toggle Orbit Lines" aria-pressed="true" data-i18n="nav.orbits">Orbits</button>
+        <button id="btn-labels" class="nav-btn active" title="Toggle Labels" aria-label="Toggle Labels" aria-pressed="true" data-i18n="nav.labels">Labels</button>
+      </div>
+      <div class="nav-divider"></div>
+      <div class="nav-group">
+        <button id="btn-music" class="nav-btn" title="Toggle Music" aria-label="Toggle Background Music">
+          <span id="music-icon">&#128264;</span>
+        </button>
+        <button id="btn-tour" class="nav-btn" title="Cinematic Tour" aria-label="Cinematic Tour">
+          <span class="nav-icon">&#127902;</span> <span class="nav-btn-text" data-i18n="nav.tour">Tour</span>
+        </button>
+        <button id="btn-fullscreen" class="nav-btn" title="Fullscreen" aria-label="Toggle Fullscreen">&#x26F6;</button>
+      </div>
     </div>
+
+    <!-- Language flags (always visible) -->
+    <div class="nav-lang">
+      <div class="lang-switch" role="radiogroup" aria-label="Language">
+        <button class="lang-btn active" data-lang="en" aria-pressed="true" title="English">
+          <span class="lang-btn-flag">&#127468;&#127463;</span>
+          <span class="lang-btn-label">EN</span>
+        </button>
+        <button class="lang-btn" data-lang="tr" aria-pressed="false" title="Türkçe">
+          <span class="lang-btn-flag">&#127481;&#127479;</span>
+          <span class="lang-btn-label">TR</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Hamburger toggle (mobile only) -->
+    <button id="nav-hamburger" class="nav-hamburger" aria-label="Toggle menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
   </nav>
+
+  <!-- Music panel -->
+  <div id="music-panel" class="hidden" role="dialog" aria-label="Music Settings" aria-hidden="true">
+    <h3 data-i18n="music.title">Music</h3>
+    <div class="music-tracks">
+      <button class="music-track active" data-track="calm">
+        <span class="music-track-icon">&#127925;</span>
+        <span data-i18n="music.calm">Calm</span>
+      </button>
+      <button class="music-track" data-track="epic">
+        <span class="music-track-icon">&#127926;</span>
+        <span data-i18n="music.epic">Epic</span>
+      </button>
+      <button class="music-track" data-track="contemplative">
+        <span class="music-track-icon">&#127911;</span>
+        <span data-i18n="music.contemplative">Contemplative</span>
+      </button>
+    </div>
+    <div class="music-volume">
+      <label data-i18n="music.volume">Volume</label>
+      <input type="range" id="music-volume-slider" min="0" max="100" value="30" />
+    </div>
+    <label class="music-auto-switch">
+      <input type="checkbox" id="music-auto-switch" checked />
+      <span data-i18n="music.autoSwitch">Auto-switch by context</span>
+    </label>
+  </div>
 
   <!-- Planet selector bar -->
   <div id="planet-bar" role="navigation" aria-label="Planet selector">
@@ -83,10 +188,40 @@
       <div class="thumb-dot" style="background: #3E54A3; --dot-color: #3E54A3;"></div>
       <span>Neptune</span>
     </button>
+    <div class="planet-bar-divider"></div>
+    <div class="dwarf-planet-group">
+      <button class="planet-thumb dwarf-toggle" id="dwarf-toggle" title="Dwarf Planets" aria-label="Toggle Dwarf Planets">
+        <div class="thumb-dot dwarf-dot" style="background: #9988AA; --dot-color: #9988AA;"></div>
+        <span data-i18n="nav.dwarfPlanets">Dwarfs</span>
+      </button>
+      <div class="dwarf-planet-submenu hidden" id="dwarf-submenu">
+        <button class="planet-thumb" data-planet="ceres" title="Ceres" aria-label="Select Ceres">
+          <div class="thumb-dot" style="background: #8a8a7a; --dot-color: #8a8a7a;"></div>
+          <span>Ceres</span>
+        </button>
+        <button class="planet-thumb" data-planet="pluto" title="Pluto" aria-label="Select Pluto">
+          <div class="thumb-dot" style="background: #c4b5a0; --dot-color: #c4b5a0;"></div>
+          <span>Pluto</span>
+        </button>
+        <button class="planet-thumb" data-planet="haumea" title="Haumea" aria-label="Select Haumea">
+          <div class="thumb-dot" style="background: #d0c8c0; --dot-color: #d0c8c0;"></div>
+          <span>Haumea</span>
+        </button>
+        <button class="planet-thumb" data-planet="makemake" title="Makemake" aria-label="Select Makemake">
+          <div class="thumb-dot" style="background: #c8a882; --dot-color: #c8a882;"></div>
+          <span>Makemake</span>
+        </button>
+        <button class="planet-thumb" data-planet="eris" title="Eris" aria-label="Select Eris">
+          <div class="thumb-dot" style="background: #b8b8c8; --dot-color: #b8b8c8;"></div>
+          <span>Eris</span>
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- Info panel (slides in on planet click) -->
   <div id="info-panel" class="hidden" role="dialog" aria-label="Planet Information" aria-hidden="true">
+    <div class="info-panel-drag-handle" id="info-drag-handle"><span></span></div>
     <button id="info-close" aria-label="Close planet information">&times;</button>
     <div id="info-content">
       <!-- Dynamically populated -->
@@ -96,8 +231,25 @@
   <!-- Compare panel -->
   <div id="compare-panel" class="hidden" role="dialog" aria-label="Planet Comparison" aria-hidden="true">
     <button id="compare-close" aria-label="Close comparison panel">&times;</button>
-    <h2>Planet Comparison</h2>
+    <h2 data-i18n="compare.title">Planet Comparison</h2>
     <div id="compare-content"></div>
+  </div>
+
+  <!-- Mission panel -->
+  <div id="mission-panel" class="hidden" role="dialog" aria-label="NASA Missions" aria-hidden="true">
+    <button id="mission-close" aria-label="Close missions panel">&times;</button>
+    <h2 data-i18n="missions.title">NASA Missions</h2>
+    <div id="mission-content">
+      <!-- Dynamically populated -->
+    </div>
+  </div>
+
+  <!-- Quiz panel -->
+  <div id="quiz-panel" class="hidden" role="dialog" aria-label="Astrophysics Quiz" aria-hidden="true">
+    <button id="quiz-close" aria-label="Close quiz panel">&times;</button>
+    <div id="quiz-content">
+      <!-- Dynamically populated -->
+    </div>
   </div>
 
   <!-- Tooltip -->
