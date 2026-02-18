@@ -66,6 +66,7 @@ export class SolarSystemScene {
     this.showOrbits = true;
     this.showLabels = true;
     this.selectedPlanet = null;
+    this.selectedMoonEntry = null; // tracks focused moon for post-transition camera tracking
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
     this.hoveredPlanet = null;
@@ -692,7 +693,10 @@ export class SolarSystemScene {
           });
 
           const moonMesh = new THREE.Mesh(moonGeo, moonMat);
-          const moonDist = moonData.distance * planetData.displayRadius * 0.6;
+          // Ensure moon orbits outside the planet surface (min clearance = planetRadius + moonRadius + buffer)
+          const rawDist = moonData.distance * planetData.displayRadius * 0.6;
+          const minDist = planetData.displayRadius + moonRadius + 0.3;
+          const moonDist = Math.max(rawDist, minDist);
           moonMesh.position.x = moonDist;
           moonMesh.userData = { key: `${key}_moon_${mi}`, type: 'moon', parentKey: key, moonIndex: mi };
           moonGroup.add(moonMesh);
@@ -948,7 +952,10 @@ export class SolarSystemScene {
           });
 
           const moonMesh = new THREE.Mesh(moonGeo, moonMat);
-          const moonDist = moonData.distance * planetData.displayRadius * 0.6;
+          // Ensure moon orbits outside the dwarf planet surface
+          const rawDist = moonData.distance * planetData.displayRadius * 0.6;
+          const minDist = planetData.displayRadius + moonRadius + 0.2;
+          const moonDist = Math.max(rawDist, minDist);
           moonMesh.position.x = moonDist;
           moonMesh.userData = { key: `${key}_moon_${mi}`, type: 'moon', parentKey: key, moonIndex: mi };
           moonGroup.add(moonMesh);
@@ -1131,6 +1138,7 @@ export class SolarSystemScene {
     this.isTransitioning = true;
     this.transitionProgress = 0;
     this.selectedPlanet = key;
+    this.selectedMoonEntry = null; // clear moon focus when selecting a planet
 
     // Disable auto-rotate when focused
     this.controls.autoRotate = false;
@@ -1181,6 +1189,7 @@ export class SolarSystemScene {
     this.isTransitioning = true;
     this.transitionProgress = 0;
     this.selectedPlanet = planetKey;
+    this.selectedMoonEntry = moonEntry; // track moon for post-transition camera following
 
     this.controls.autoRotate = false;
     this.controls.minDistance = Math.max(0.5, moonRadius * 2);
@@ -1216,6 +1225,7 @@ export class SolarSystemScene {
     this.isTransitioning = true;
     this.transitionProgress = 0;
     this.selectedPlanet = null;
+    this.selectedMoonEntry = null;
 
     // Enable auto-rotate in overview
     this.controls.autoRotate = true;
@@ -1254,6 +1264,7 @@ export class SolarSystemScene {
     this.isTransitioning = true;
     this.transitionProgress = 0;
     this.selectedPlanet = null;
+    this.selectedMoonEntry = null;
 
     this.controls.autoRotate = true;
     this.controls.autoRotateSpeed = 0.2;
@@ -1463,6 +1474,7 @@ export class SolarSystemScene {
     this.isTransitioning = true;
     this.transitionProgress = 0;
     this.selectedPlanet = null;
+    this.selectedMoonEntry = null;
     this.targetCameraPos = new THREE.Vector3(40, 30, 80);
     this.targetLookAt = new THREE.Vector3(0, 0, 0);
 
@@ -1681,8 +1693,12 @@ export class SolarSystemScene {
       }
     }
 
-    // If following a planet, keep updating the look target
-    if (this.selectedPlanet && !this.isTransitioning) {
+    // If following a moon or planet, keep updating the look target
+    if (this.selectedMoonEntry && !this.isTransitioning) {
+      const moonWorldPos = new THREE.Vector3();
+      this.selectedMoonEntry.mesh.getWorldPosition(moonWorldPos);
+      this.controls.target.lerp(moonWorldPos, 0.05);
+    } else if (this.selectedPlanet && !this.isTransitioning) {
       const currentPos = this.getPlanetWorldPosition(this.selectedPlanet);
       this.controls.target.lerp(currentPos, 0.05);
     }

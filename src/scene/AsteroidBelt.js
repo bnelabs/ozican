@@ -23,16 +23,14 @@ export class AsteroidBelt {
 
     this._mainBeltGroup = new THREE.Group();
 
-    // Two geometry variants: rounded and angular
-    const detailLevel = this._quality === 'high' ? 1 : 0;
-    const geoRounded = this._createDeformedIcosahedron(1, Math.max(detailLevel, 1), 42);
-    const geoAngular = this._createDeformedIcosahedron(1, 0, 99);
+    // Two geometry variants: rounded and angular (detail 2 = 162 verts for realistic shapes)
+    const geoRounded = this._createDeformedIcosahedron(1, 2, 42, 0.55, 1.45);
+    const geoAngular = this._createDeformedIcosahedron(1, 2, 99, 0.45, 1.55);
 
-    // Shared material: flat-shaded PBR
+    // Shared material: smooth-shaded PBR for realistic rock appearance
     const mat = new THREE.MeshStandardMaterial({
-      flatShading: true,
-      roughness: 0.9,
-      metalness: 0.05,
+      roughness: 0.92,
+      metalness: 0.08,
     });
 
     // 65/35 split
@@ -64,19 +62,24 @@ export class AsteroidBelt {
     this.scene.add(this._mainBeltGroup);
   }
 
-  _createDeformedIcosahedron(radius, detail, seed) {
+  _createDeformedIcosahedron(radius, detail, seed, noiseMin = 0.55, noiseMax = 1.45) {
     const geo = new THREE.IcosahedronGeometry(radius, detail);
     const pos = geo.attributes.position;
-    // Apply noise deformation to each vertex
+    // Apply noise deformation to each vertex for realistic rocky shapes
     let s = seed;
     const rand = () => { s = (s * 16807 + 0) % 2147483647; return s / 2147483647; };
+    const range = noiseMax - noiseMin;
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
       const y = pos.getY(i);
       const z = pos.getZ(i);
       const len = Math.sqrt(x * x + y * y + z * z);
-      const noise = 0.75 + rand() * 0.5; // 0.75..1.25
-      const newLen = len * noise;
+      // Multi-octave noise for realistic surface variation
+      const n1 = rand(); // large-scale shape
+      const n2 = rand() * 0.3; // medium bumps
+      const noise = noiseMin + n1 * range + n2 * (range * 0.3);
+      const clamped = Math.max(noiseMin, Math.min(noiseMax, noise));
+      const newLen = len * clamped;
       const scale = newLen / (len || 1);
       pos.setXYZ(i, x * scale, y * scale, z * scale);
     }

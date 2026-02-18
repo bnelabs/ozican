@@ -502,6 +502,9 @@ export class CutawayRenderer {
     // Two rim rings
     this._createWedgeRims(planetRadius);
 
+    // 3D labels that follow the planet (only on main mode)
+    this._create3DLabels(layers, maxR, planetRadius);
+
     this._startTime = performance.now();
     this._animate();
   }
@@ -565,6 +568,50 @@ export class CutawayRenderer {
     rimMesh2.position.z = 0.002;
     this.planetMesh.add(rimMesh2);
     this.layerMeshes.push({ mesh: rimMesh2, data: null, radius: planetRadius, isRim: true });
+  }
+
+  /** Create 3D text labels positioned along the cutaway face for on-planet mode */
+  _create3DLabels(layers, maxR, planetRadius) {
+    this._3dLabelSprites = [];
+    for (let i = 0; i < layers.length; i++) {
+      const layer = layers[i];
+      const r = (layer.r / maxR) * planetRadius;
+      // Position labels along the X-cut face (at x=0, varying z based on layer radius)
+      const labelText = t(layer.key);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = 256;
+      canvas.height = 48;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.font = 'bold 24px "Inter", sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      // Subtle text shadow for readability
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = 4;
+      ctx.fillText(labelText, 4, 24);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.needsUpdate = true;
+      const spriteMat = new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        opacity: 0,
+        depthTest: false,
+      });
+      const sprite = new THREE.Sprite(spriteMat);
+      // Position between this layer and the next (midpoint radially)
+      const nextR = i < layers.length - 1 ? (layers[i + 1].r / maxR) * planetRadius : 0;
+      const midR = (r + nextR) / 2;
+      // Place on the exposed X-cut face, offset slightly into +X
+      sprite.position.set(0.05, 0, -midR);
+      const spriteScale = planetRadius * 0.35;
+      sprite.scale.set(spriteScale, spriteScale * 0.19, 1);
+      this.planetMesh.add(sprite);
+      this._3dLabelSprites.push(sprite);
+      this.layerMeshes.push({ mesh: sprite, data: null, radius: 0, isLabel: true });
+    }
   }
 
   /** Legacy mode: self-contained mini-renderer (fallback for panel-based display) */
@@ -713,7 +760,7 @@ export class CutawayRenderer {
 
     const now = performance.now();
     const elapsed = now - this._startTime;
-    const duration = 4000;
+    const duration = 6000; // 6 seconds for dramatic reveal
     const progress = Math.min(elapsed / duration, 1);
 
     const p = progress;
@@ -737,9 +784,14 @@ export class CutawayRenderer {
     if (this._semiClipZ) this._semiClipZ.constant = wz;
     if (this._semiClipX) this._semiClipX.constant = wx;
 
-    // Subtle planet rotation during reveal
-    if (this.planetMesh && progress < 1) {
-      this.planetMesh.rotation.y += 0.002 * (1 - progress);
+    // Subtle planet rotation during reveal, continues slowly after completion
+    if (this.planetMesh) {
+      if (progress < 1) {
+        this.planetMesh.rotation.y += 0.002 * (1 - progress);
+      } else {
+        // Gentle post-reveal rotation to showcase 3D depth
+        this.planetMesh.rotation.y += 0.001;
+      }
     }
 
     // Animate core light intensity for cinematic pulsing
@@ -756,6 +808,19 @@ export class CutawayRenderer {
       this._faceMaterial2.uniforms.time.value = time;
     }
 
+    // Progressive label reveal — stagger labels as layers are exposed
+    if (this._3dLabelSprites && this._3dLabelSprites.length > 0) {
+      for (let i = 0; i < this._3dLabelSprites.length; i++) {
+        const threshold = (i + 0.5) / this._3dLabelSprites.length;
+        const sprite = this._3dLabelSprites[i];
+        if (eased >= threshold) {
+          // Fade in over 0.3s
+          const labelAge = (eased - threshold) / 0.15;
+          sprite.material.opacity = Math.min(1, labelAge);
+        }
+      }
+    }
+
     if (progress >= 1 && !this._animationComplete) {
       this._animationComplete = true;
     }
@@ -768,7 +833,7 @@ export class CutawayRenderer {
 
     const now = performance.now();
     const elapsed = now - this._startTime;
-    const duration = 4000;
+    const duration = 6000;
     const progress = Math.min(elapsed / duration, 1);
 
     const p = progress;
@@ -862,6 +927,10 @@ export class CutawayRenderer {
       if (l.isLight) {
         if (l.mesh.parent) l.mesh.parent.remove(l.mesh);
         l.mesh.dispose();
+      } else if (l.isLabel) {
+        if (l.mesh.parent) l.mesh.parent.remove(l.mesh);
+        if (l.mesh.material && l.mesh.material.map) l.mesh.material.map.dispose();
+        if (l.mesh.material) l.mesh.material.dispose();
       } else {
         if (l.mesh.parent) l.mesh.parent.remove(l.mesh);
         if (l.mesh.geometry) l.mesh.geometry.dispose();
@@ -869,6 +938,7 @@ export class CutawayRenderer {
       }
     }
     this.layerMeshes = [];
+    this._3dLabelSprites = null;
 
     if (this.mainRenderer) {
       this.mainRenderer.localClippingEnabled = false;
