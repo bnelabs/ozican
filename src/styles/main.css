@@ -12,7 +12,7 @@
   --bg-glass: rgba(10, 10, 18, 0.6);
   --text-primary: #e8e8f0;
   --text-secondary: #9898b0;
-  --text-muted: #5a5a78;
+  --text-muted: #7a7a9a;
   --accent: #4a9eff;
   --accent-glow: rgba(74, 158, 255, 0.3);
   --gold: #ffd700;
@@ -343,11 +343,24 @@ body.nav-sheet-open::after {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Group labels visible in mobile bottom sheet */
+.nav-controls.open .nav-group[data-group-label]::before {
+  content: attr(data-group-label);
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: var(--space-1) var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
 .nav-controls .nav-group .nav-btn {
   width: 100%;
   justify-content: flex-start;
-  min-height: 48px;
-  font-size: 0.85rem;
+  min-height: 52px;
+  font-size: 0.9rem;
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.03);
@@ -368,7 +381,7 @@ body.nav-sheet-open::after {
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-pill);
   font-family: var(--font-main);
-  font-size: 0.74rem;
+  font-size: 0.82rem;
   font-weight: 400;
   letter-spacing: 0.02em;
   cursor: pointer;
@@ -558,7 +571,7 @@ body.nav-sheet-open::after {
   border-radius: var(--radius-pill);
   transition: var(--transition);
   font-family: var(--font-main);
-  font-size: 0.62rem;
+  font-size: 0.72rem;
   letter-spacing: 0.04em;
   flex-shrink: 0;
   min-width: 44px;
@@ -789,13 +802,15 @@ body.nav-sheet-open::after {
   right: 0;
   z-index: 200;
   max-height: 40vh;
-  background: rgba(8, 8, 20, 0.72);
-  backdrop-filter: blur(30px) saturate(1.4);
-  -webkit-backdrop-filter: blur(30px) saturate(1.4);
+  background: rgba(12, 14, 28, 0.55);
+  backdrop-filter: blur(40px) saturate(1.6);
+  -webkit-backdrop-filter: blur(40px) saturate(1.6);
   border-top-left-radius: 16px;
   border-top-right-radius: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 -4px 24px rgba(0, 0, 0, 0.3);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08),
+              inset 0 0 40px rgba(74, 158, 255, 0.03),
+              0 -4px 30px rgba(0, 0, 0, 0.4);
   overflow-y: auto;
   transform: translateY(0);
   transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -803,6 +818,24 @@ body.nav-sheet-open::after {
               max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   overscroll-behavior: contain;
   animation: slideUpPanel 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+#info-panel::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 30%;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.02), transparent);
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+#info-content,
+#info-close {
+  position: relative;
+  z-index: 1;
 }
 
 @keyframes slideUpPanel {
@@ -1954,8 +1987,9 @@ kbd {
 
   .nav-divider {
     width: 1px;
-    height: 24px;
+    height: 28px;
     background: var(--border);
+    opacity: 0.12;
   }
 
   .nav-group {
@@ -1971,14 +2005,16 @@ kbd {
     width: 360px;
     max-width: 90vw;
     max-height: unset;
-    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    border-left: 1px solid rgba(255, 255, 255, 0.10);
     border-top-left-radius: 16px;
     border-top-right-radius: 0;
     border-bottom-left-radius: 0;
-    background: rgba(8, 8, 20, 0.68);
-    backdrop-filter: blur(30px) saturate(1.4);
-    -webkit-backdrop-filter: blur(30px) saturate(1.4);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), -4px 0 24px rgba(0, 0, 0, 0.2);
+    background: rgba(12, 14, 28, 0.55);
+    backdrop-filter: blur(40px) saturate(1.6);
+    -webkit-backdrop-filter: blur(40px) saturate(1.6);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08),
+                inset 0 0 40px rgba(74, 158, 255, 0.03),
+                -4px 0 30px rgba(0, 0, 0, 0.4);
     transform: translateX(0);
     animation: slideInRight 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
@@ -2060,7 +2096,7 @@ kbd {
   }
 
   .nav-btn {
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     padding: var(--space-2) var(--space-4);
   }
 
@@ -2069,7 +2105,7 @@ kbd {
   }
 
   .planet-thumb {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     padding: var(--space-2) var(--space-3);
   }
 }

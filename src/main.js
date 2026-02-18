@@ -248,6 +248,8 @@ function showLangPicker() {
   const pickerBtns = langPicker.querySelectorAll('.lang-picker-btn');
   pickerBtns.forEach(btn => {
     btn.addEventListener('click', () => {
+      // Init AudioContext synchronously within user gesture
+      audioManager.init();
       const lang = btn.dataset.lang;
       localStorage.setItem(LANG_STORAGE_KEY, lang);
       setLang(lang);
@@ -343,15 +345,14 @@ function startApp() {
   // Wire scene callbacks
   wireSceneCallbacks();
 
-  // Initialize audio (after user interaction via lang picker)
-  // Force unmuted on first load so music auto-plays
+  // Play music — AudioContext was already initialized synchronously
+  // in endDedication() or lang picker click handler (user gesture context)
   audioManager.init().then(() => {
     if (!audioManager.playing) {
       audioManager.play();
     }
     updateMusicIcon();
   });
-  updateMusicIcon();
 }
 
 let loadingComplete = false;
@@ -452,6 +453,10 @@ function showDedication() {
 function endDedication() {
   if (dedicationScreen.classList.contains('hidden')) return;
 
+  // Init AudioContext synchronously within user gesture (skip button click)
+  // so browsers allow autoplay in the subsequent startApp() call
+  audioManager.init();
+
   // Fade out dedication audio
   if (dedicationAudio) {
     const fadeAudio = dedicationAudio;
@@ -470,7 +475,6 @@ function endDedication() {
 
   dedicationScreen.classList.add('fade-out');
   localStorage.setItem(DEDICATION_KEY, '1');
-  sessionStorage.setItem('ozmos-dedication-played', '1');
   setTimeout(() => {
     dedicationScreen.classList.add('hidden');
     dedicationScreen.classList.remove('fade-out');
@@ -485,16 +489,8 @@ function endDedication() {
 
 // ==================== Boot ====================
 
-// Boot — dedication takes priority
-// Show dedication every session (not just first visit) to showcase the music and poem
-if (!sessionStorage.getItem('ozmos-dedication-played')) {
-  showDedication();
-} else if (localStorage.getItem(LANG_STORAGE_KEY)) {
-  initLang();
-  startApp();
-} else {
-  showLangPicker();
-}
+// Boot — dedication plays on every page load
+showDedication();
 
 // ==================== Planet Labels ====================
 
