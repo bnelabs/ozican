@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { SOLAR_SYSTEM } from '../data/solarSystem.js';
 import { DWARF_PLANETS } from '../data/dwarfPlanets.js';
+import { ASTEROIDS } from '../data/asteroids.js';
 import { MISSIONS } from '../data/missions.js';
 
 // ==================== Constants ====================
@@ -123,6 +124,47 @@ const ELEMENTS = {
     L: [204.0, 55.53],
     longPeri: [151.0, 0.0],
     longNode: [35.87, 0.0],
+  },
+  // Notable asteroids — NASA JPL approximate elements
+  vesta: {
+    a: [2.3615, 0.0],
+    e: [0.0887, 0.0],
+    I: [7.1422, 0.0],
+    L: [20.86, 99154.17],
+    longPeri: [149.85, 0.0],
+    longNode: [103.85, 0.0],
+  },
+  pallas: {
+    a: [2.7716, 0.0],
+    e: [0.2313, 0.0],
+    I: [34.832, 0.0],
+    L: [198.0, 78039.42],
+    longPeri: [310.04, 0.0],
+    longNode: [173.09, 0.0],
+  },
+  hygiea: {
+    a: [3.1421, 0.0],
+    e: [0.1146, 0.0],
+    I: [3.8316, 0.0],
+    L: [283.2, 64651.98],
+    longPeri: [312.4, 0.0],
+    longNode: [283.2, 0.0],
+  },
+  juno: {
+    a: [2.6700, 0.0],
+    e: [0.2562, 0.0],
+    I: [12.982, 0.0],
+    L: [248.2, 82084.76],
+    longPeri: [247.84, 0.0],
+    longNode: [169.91, 0.0],
+  },
+  eros: {
+    a: [1.4580, 0.0],
+    e: [0.2226, 0.0],
+    I: [10.829, 0.0],
+    L: [178.8, 130493.76],
+    longPeri: [178.64, 0.0],
+    longNode: [304.32, 0.0],
   },
 };
 
@@ -275,8 +317,8 @@ export function getPlanetHeliocentricAU(planetKey, dateStr) {
  * Uses ratio of display orbit radius to real semi-major axis.
  */
 function auToScene(planetKey, posAU) {
-  // Check both SOLAR_SYSTEM and DWARF_PLANETS for data
-  const data = SOLAR_SYSTEM[planetKey] || DWARF_PLANETS[planetKey];
+  // Check SOLAR_SYSTEM, DWARF_PLANETS, and ASTEROIDS for data
+  const data = SOLAR_SYSTEM[planetKey] || DWARF_PLANETS[planetKey] || ASTEROIDS[planetKey];
   if (!data || !data.orbitRadius) return new THREE.Vector3(posAU.x * 36, posAU.z * 0.5, posAU.y * 36);
 
   const elem = ELEMENTS[planetKey];

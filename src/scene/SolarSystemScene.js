@@ -22,6 +22,7 @@ import { getPlanetHeliocentricAU, getCurrentDateStr, advanceDateStr } from './Or
 import { AsteroidBelt } from './AsteroidBelt.js';
 import { ISSTracker } from './ISSTracker.js';
 import { DWARF_PLANETS, DWARF_PLANET_ORDER } from '../data/dwarfPlanets.js';
+import { ASTEROIDS, ASTEROID_ORDER } from '../data/asteroids.js';
 import {
   generateMercuryTexture, generateVenusTexture, generateEarthTexture,
   generateEarthClouds, generateMarsTexture, generateJupiterTexture,
@@ -169,11 +170,14 @@ export class SolarSystemScene {
     this.asteroidBelt = new AsteroidBelt(this.scene);
     this.asteroidBelt.createMainBelt();
     this.asteroidBelt.createKuiperBelt();
+    this.asteroidBelt.createNotableAsteroids();
+    this._createAsteroidOrbits();
     this.onProgress(85);
 
     // Sync planets to today's real positions
     this.syncPlanetsToDate(this._simDate);
     this._syncDwarfPlanetsToDate(this._simDate);
+    this._syncAsteroidsToDate(this._simDate);
 
     // Post-processing bloom (desktop only)
     this.composer = null;
@@ -989,6 +993,50 @@ export class SolarSystemScene {
     }
   }
 
+  _createAsteroidOrbits() {
+    if (!this.asteroidBelt) return;
+    for (const key of ASTEROID_ORDER) {
+      const data = ASTEROIDS[key];
+      if (!data) continue;
+
+      const segments = 256;
+      const points = [];
+      for (let i = 0; i <= segments; i++) {
+        const angle = (i / segments) * Math.PI * 2;
+        const e = data.eccentricity || 0;
+        const r = data.orbitRadius * (1 - e * e) / (1 + e * Math.cos(angle));
+        points.push(Math.cos(angle) * r, 0, Math.sin(angle) * r);
+      }
+
+      const orbitGeo = new THREE.BufferGeometry();
+      orbitGeo.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+      const orbitMat = new THREE.LineDashedMaterial({
+        color: 0x888866,
+        transparent: true,
+        opacity: 0.1,
+        dashSize: 0.8,
+        gapSize: 0.6,
+      });
+
+      const orbitLine = new THREE.Line(orbitGeo, orbitMat);
+      orbitLine.computeLineDistances();
+      orbitLine.rotation.x = THREE.MathUtils.degToRad(data.orbitInclination || 0);
+      this.scene.add(orbitLine);
+      this.orbitLines[key] = orbitLine;
+    }
+  }
+
+  _syncAsteroidsToDate(dateStr) {
+    if (!dateStr || !this.asteroidBelt) return;
+    for (const key of ASTEROID_ORDER) {
+      const asteroid = this.asteroidBelt.getNotableAsteroid(key);
+      if (!asteroid) continue;
+      const posAU = getPlanetHeliocentricAU(key, dateStr);
+      if (posAU.x === 0 && posAU.y === 0 && posAU.z === 0) continue;
+      asteroid.orbitGroup.rotation.y = Math.atan2(-posAU.y, posAU.x);
+    }
+  }
+
   /** Get the current simulation date */
   getSimDate() {
     return this._simDate;
@@ -998,21 +1046,33 @@ export class SolarSystemScene {
   getPlanetWorldPosition(key) {
     if (key === 'sun') return new THREE.Vector3(0, 0, 0);
     const planet = this.planets[key] || this.dwarfPlanets[key];
-    if (!planet) return new THREE.Vector3(0, 0, 0);
-    const worldPos = new THREE.Vector3();
-    planet.mesh.getWorldPosition(worldPos);
-    return worldPos;
+    if (planet) {
+      const worldPos = new THREE.Vector3();
+      planet.mesh.getWorldPosition(worldPos);
+      return worldPos;
+    }
+    // Check notable asteroids
+    if (this.asteroidBelt) {
+      const asteroid = this.asteroidBelt.getNotableAsteroid(key);
+      if (asteroid) {
+        const worldPos = new THREE.Vector3();
+        asteroid.mesh.getWorldPosition(worldPos);
+        return worldPos;
+      }
+    }
+    return new THREE.Vector3(0, 0, 0);
   }
 
   /** Focus camera on a planet with cinematic cubic Bezier arc */
   focusOnPlanet(key) {
     const worldPos = this.getPlanetWorldPosition(key);
-    const planetData = SOLAR_SYSTEM[key] || DWARF_PLANETS[key];
+    const planetData = SOLAR_SYSTEM[key] || DWARF_PLANETS[key] || ASTEROIDS[key];
     if (!planetData) return;
     const radius = planetData.displayRadius;
-    // Dwarf planets are tiny — get camera closer for visibility
+    // Dwarf planets and asteroids are tiny — get camera closer for visibility
     const isDwarf = DWARF_PLANETS[key] !== undefined;
-    const distance = isDwarf ? radius * 3 + 2 : radius * 5 + 3;
+    const isAsteroid = ASTEROIDS[key] !== undefined;
+    const distance = (isDwarf || isAsteroid) ? radius * 3 + 2 : radius * 5 + 3;
 
     this.startCameraPos.copy(this.camera.position);
     this.startLookAt.copy(this.controls.target);
@@ -1268,6 +1328,13 @@ export class SolarSystemScene {
         clickable.push(this.dwarfPlanets[key].mesh);
       }
     }
+    // Notable asteroids
+    if (this.asteroidBelt) {
+      for (const key of ASTEROID_ORDER) {
+        const asteroid = this.asteroidBelt.getNotableAsteroid(key);
+        if (asteroid) clickable.push(asteroid.mesh);
+      }
+    }
     // Add moons
     for (const key of Object.keys(this.moonMeshes)) {
       for (const moon of this.moonMeshes[key]) {
@@ -1303,6 +1370,12 @@ export class SolarSystemScene {
     }
     for (const key of DWARF_PLANET_ORDER) {
       if (this.dwarfPlanets[key]) clickable.push(this.dwarfPlanets[key].mesh);
+    }
+    if (this.asteroidBelt) {
+      for (const key of ASTEROID_ORDER) {
+        const asteroid = this.asteroidBelt.getNotableAsteroid(key);
+        if (asteroid) clickable.push(asteroid.mesh);
+      }
     }
 
     const intersects = this.raycaster.intersectObjects(clickable, false);
@@ -1440,6 +1513,7 @@ export class SolarSystemScene {
       this._simDate = advanceDateStr(this._simDate, daysAdvanced);
       this.syncPlanetsToDate(this._simDate);
       this._syncDwarfPlanetsToDate(this._simDate);
+      this._syncAsteroidsToDate(this._simDate);
 
       // Fire date update callback
       if (this.onDateUpdate) this.onDateUpdate(this._simDate);
@@ -1493,13 +1567,13 @@ export class SolarSystemScene {
 
     // Proximity-based orbit line fading
     if (this.showOrbits) {
-      const allOrbitKeys = [...planetKeys, ...DWARF_PLANET_ORDER];
+      const allOrbitKeys = [...planetKeys, ...DWARF_PLANET_ORDER, ...ASTEROID_ORDER];
       for (const key of allOrbitKeys) {
         const orbitLine = this.orbitLines[key];
         if (!orbitLine) continue;
         const planetWorldPos = this.getPlanetWorldPosition(key);
         const camDist = this.camera.position.distanceTo(planetWorldPos);
-        const pData = SOLAR_SYSTEM[key] || DWARF_PLANETS[key];
+        const pData = SOLAR_SYSTEM[key] || DWARF_PLANETS[key] || ASTEROIDS[key];
         const radius = pData ? pData.displayRadius : 1;
         orbitLine.material.opacity = 0.15 * THREE.MathUtils.clamp(camDist / (radius * 15), 0, 1);
       }
@@ -1517,9 +1591,10 @@ export class SolarSystemScene {
       // If tracking a selected planet, update target
       if (this.selectedPlanet) {
         const currentPos = this.getPlanetWorldPosition(this.selectedPlanet);
-        const pData = SOLAR_SYSTEM[this.selectedPlanet] || DWARF_PLANETS[this.selectedPlanet];
+        const pData = SOLAR_SYSTEM[this.selectedPlanet] || DWARF_PLANETS[this.selectedPlanet] || ASTEROIDS[this.selectedPlanet];
         const radius = pData ? pData.displayRadius : 1;
-        const distance = radius * 5 + 3;
+        const isDwarfOrAsteroid = DWARF_PLANETS[this.selectedPlanet] || ASTEROIDS[this.selectedPlanet];
+        const distance = isDwarfOrAsteroid ? radius * 3 + 2 : radius * 5 + 3;
         this.targetCameraPos.set(
           currentPos.x + distance * 0.7,
           currentPos.y + distance * 0.4,

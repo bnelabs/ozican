@@ -13,7 +13,7 @@ import { audioManager } from './audio/AudioManager.js';
 import { CinematicTour } from './scene/CinematicTour.js';
 import { PLANET_ORDER, SOLAR_SYSTEM } from './data/solarSystem.js';
 import { DWARF_PLANETS, DWARF_PLANET_ORDER } from './data/dwarfPlanets.js';
-import { ASTEROIDS } from './data/asteroids.js';
+import { ASTEROIDS, ASTEROID_ORDER } from './data/asteroids.js';
 import { MISSIONS } from './data/missions.js';
 import { startOnboarding } from './ui/Onboarding.js';
 import { renderQuizMenu, renderQuizQuestion, renderQuizResult, renderQuizSummary } from './ui/QuizPanel.js';
@@ -171,7 +171,7 @@ function refreshStaticText() {
   });
 
   // Update planet labels in 3D scene
-  for (const key of [...PLANET_ORDER, ...DWARF_PLANET_ORDER]) {
+  for (const key of [...PLANET_ORDER, ...DWARF_PLANET_ORDER, ...ASTEROID_ORDER]) {
     const el = labelElements[key];
     if (el) {
       const data = getLocalizedPlanet(key);
@@ -499,7 +499,7 @@ if (!sessionStorage.getItem('ozmos-dedication-played')) {
 // ==================== Planet Labels ====================
 
 function createLabels() {
-  for (const key of [...PLANET_ORDER, ...DWARF_PLANET_ORDER]) {
+  for (const key of [...PLANET_ORDER, ...DWARF_PLANET_ORDER, ...ASTEROID_ORDER]) {
     const data = getLocalizedPlanet(key);
     if (!data) continue;
     const el = document.createElement('div');
@@ -519,14 +519,14 @@ function updateLabels() {
     return;
   }
 
-  for (const key of [...PLANET_ORDER, ...DWARF_PLANET_ORDER]) {
+  for (const key of [...PLANET_ORDER, ...DWARF_PLANET_ORDER, ...ASTEROID_ORDER]) {
     const el = labelElements[key];
     if (!el) continue;
 
     const pos = scene.getScreenPosition(key);
     if (pos.visible && pos.x > -100 && pos.x < window.innerWidth + 100 &&
         pos.y > -100 && pos.y < window.innerHeight + 100) {
-      const pData = SOLAR_SYSTEM[key] || DWARF_PLANETS[key];
+      const pData = SOLAR_SYSTEM[key] || DWARF_PLANETS[key] || ASTEROIDS[key];
       const offset = (pData ? pData.displayRadius : 1) * 8 + 12;
       el.style.left = pos.x + 'px';
       el.style.top = (pos.y - offset) + 'px';
@@ -679,13 +679,9 @@ function openInfoPanel(key) {
 
   wireCompactHandlers(key);
 
-  // Focus camera — asteroids focus on the belt region (Ceres orbit area)
+  // Focus camera on the selected body (planets, dwarfs, and asteroids all use focusOnPlanet)
   if (scene) {
-    if (ASTEROIDS[key] && scene.focusOnAsteroidBelt) {
-      scene.focusOnAsteroidBelt();
-    } else {
-      scene.focusOnPlanet(key);
-    }
+    scene.focusOnPlanet(key);
   }
 
   // Context-aware music
