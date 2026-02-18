@@ -225,9 +225,8 @@ export class AsteroidBelt {
       const geo = this._createAsteroidGeometry(key);
       const mat = new THREE.MeshStandardMaterial({
         color: data.color,
-        roughness: 0.85,
-        metalness: 0.08,
-        flatShading: true,
+        roughness: 0.9,
+        metalness: 0.1,
       });
 
       const mesh = new THREE.Mesh(geo, mat);
@@ -264,13 +263,13 @@ export class AsteroidBelt {
       case 'hygiea': return this._createHygieaGeometry();
       case 'juno': return this._createJunoGeometry();
       case 'eros': return this._createErosGeometry();
-      default: return new THREE.IcosahedronGeometry(1, 1);
+      default: return new THREE.IcosahedronGeometry(1, 3);
     }
   }
 
   /** Vesta: sphere with south pole basin (Rheasilvia) + central peak + noise */
   _createVestaGeometry() {
-    const geo = new THREE.IcosahedronGeometry(1, 2);
+    const geo = new THREE.IcosahedronGeometry(1, 3);
     const pos = geo.attributes.position;
     let seed = 4242;
     const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
@@ -308,7 +307,7 @@ export class AsteroidBelt {
 
   /** Pallas: oblate sphere with crater depressions + heavy noise */
   _createPallasGeometry() {
-    const geo = new THREE.IcosahedronGeometry(1, 2);
+    const geo = new THREE.IcosahedronGeometry(1, 3);
     const pos = geo.attributes.position;
     let seed = 1802;
     const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
@@ -358,7 +357,7 @@ export class AsteroidBelt {
 
   /** Hygiea: nearly spherical with very mild noise */
   _createHygieaGeometry() {
-    const geo = new THREE.IcosahedronGeometry(1, 2);
+    const geo = new THREE.IcosahedronGeometry(1, 3);
     const pos = geo.attributes.position;
     let seed = 2019;
     const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
@@ -378,9 +377,9 @@ export class AsteroidBelt {
     return geo;
   }
 
-  /** Juno: angular icosahedron, slightly elongated, with crater depressions */
+  /** Juno: slightly elongated with crater depressions */
   _createJunoGeometry() {
-    const geo = new THREE.IcosahedronGeometry(1, 1);
+    const geo = new THREE.IcosahedronGeometry(1, 3);
     const pos = geo.attributes.position;
     let seed = 1804;
     const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
@@ -431,7 +430,7 @@ export class AsteroidBelt {
 
   /** Eros: peanut/bi-lobed shape via waist pinch + X-axis elongation */
   _createErosGeometry() {
-    const geo = new THREE.IcosahedronGeometry(1, 2);
+    const geo = new THREE.IcosahedronGeometry(1, 3);
     const pos = geo.attributes.position;
     let seed = 2000;
     const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
