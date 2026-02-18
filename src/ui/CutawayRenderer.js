@@ -1,10 +1,11 @@
 /**
  * CutawayRenderer — renders cross-section directly on the 3D planet in the main scene.
- * Instead of a separate mini-renderer, this adds clipped layer spheres as children
- * of the actual planet mesh and animates a clipping plane to reveal internal structure.
+ * Uses dual perpendicular clipping planes with clipIntersection=true to remove one
+ * quadrant (quarter-section) of the sphere, exposing curved 3D interior layers —
+ * like a National Geographic / geology textbook illustration.
  *
- * Enhanced with custom GLSL shader for National Geographic-quality cross-section face,
- * core glow lighting, rim highlight, and procedural geological texturing.
+ * Enhanced with custom GLSL shader for cross-section faces, core glow lighting,
+ * rim highlights, and procedural geological texturing.
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -110,7 +111,8 @@ export class CutawayRenderer {
     this.planetMesh = planetMesh;
     this.mainRenderer = renderer;
     this.layerMeshes = [];
-    this.clipPlane = null;
+    this.clipPlane1 = null;
+    this.clipPlane2 = null;
     this._animationId = null;
     this._disposed = false;
     this._labelElements = [];
@@ -118,7 +120,8 @@ export class CutawayRenderer {
     this._startTime = null;
     this._originalMaterials = [];
     this._coreLight = null;
-    this._faceMaterial = null;
+    this._faceMaterial1 = null;
+    this._faceMaterial2 = null;
 
     // Fallback: if no planet mesh provided, use legacy mini-renderer mode
     this._useLegacyMode = !planetMesh;
@@ -181,15 +184,23 @@ export class CutawayRenderer {
       ? this.planetMesh.geometry.parameters.radius
       : 1;
 
-    // Create clipping plane in planet's local space (starts fully closed)
-    this.clipPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0);
+    const maxR = layers[0].r;
+
+    // Two perpendicular clipping planes (start fully closed — constant = maxR*1.1)
+    // Plane 1: normal (-1,0,0) — clips +X side
+    // Plane 2: normal (0,0,-1) — clips +Z side
+    // With clipIntersection=true, only the quadrant where BOTH planes clip is removed
+    this.clipPlane1 = new THREE.Plane(new THREE.Vector3(-1, 0, 0), planetRadius * 1.1);
+    this.clipPlane2 = new THREE.Plane(new THREE.Vector3(0, 0, -1), planetRadius * 1.1);
+    const clipPlanes = [this.clipPlane1, this.clipPlane2];
 
     // Save original material and modify to support clipping
     const origMat = this.planetMesh.material;
     this._originalMaterials.push({ mesh: this.planetMesh, material: origMat });
 
     const clippedMat = origMat.clone();
-    clippedMat.clippingPlanes = [this.clipPlane];
+    clippedMat.clippingPlanes = clipPlanes;
+    clippedMat.clipIntersection = true;
     clippedMat.clipShadows = true;
     clippedMat.side = THREE.DoubleSide;
     this.planetMesh.material = clippedMat;
@@ -199,7 +210,8 @@ export class CutawayRenderer {
       if (child.material) {
         this._originalMaterials.push({ mesh: child, material: child.material });
         const cMat = child.material.clone();
-        cMat.clippingPlanes = [this.clipPlane];
+        cMat.clippingPlanes = clipPlanes;
+        cMat.clipIntersection = true;
         cMat.clipShadows = true;
         cMat.side = THREE.DoubleSide;
         child.material = cMat;
@@ -207,7 +219,6 @@ export class CutawayRenderer {
     });
 
     // Create concentric layer spheres as children of the planet mesh
-    const maxR = layers[0].r;
     for (let i = 0; i < layers.length; i++) {
       const layer = layers[i];
       // Skip outermost layer (that's the planet surface itself)
@@ -217,7 +228,7 @@ export class CutawayRenderer {
       const segments = Math.max(24, Math.floor(48 * (radius / planetRadius)));
       const geo = new THREE.SphereGeometry(radius, segments, segments);
 
-      // Vary material properties by layer depth (Step 1B)
+      // Vary material properties by layer depth
       const isCore = i === layers.length - 1;
       const isInner = i === layers.length - 2;
       const emissiveScale = isCore ? 0.5 : isInner ? 0.25 : 0.1;
@@ -225,7 +236,8 @@ export class CutawayRenderer {
         color: layer.color,
         roughness: isCore ? 0.3 : 0.6,
         metalness: isCore ? 0.3 : 0.15,
-        clippingPlanes: [this.clipPlane],
+        clippingPlanes: clipPlanes,
+        clipIntersection: true,
         clipShadows: true,
         side: THREE.DoubleSide,
         emissive: new THREE.Color(layer.color).multiplyScalar(emissiveScale),
@@ -237,42 +249,82 @@ export class CutawayRenderer {
       this.layerMeshes.push({ mesh, data: layer, radius });
     }
 
-    // Create cross-section face (shader disc at the cut plane)
-    this._createCrossSectionFace(layers, maxR, planetRadius);
+    // Create two cross-section face discs (one per cut plane)
+    this._createWedgeFaces(layers, maxR, planetRadius);
 
-    // Core glow PointLight (Step 1C)
+    // Core glow PointLight
     const coreColor = new THREE.Color(layers[layers.length - 1].color);
     this._coreLight = new THREE.PointLight(coreColor, 2.0, planetRadius * 2, 2);
     this.planetMesh.add(this._coreLight);
 
-    // Rim highlight on cut edge (Step 1D)
-    const rimGeo = new THREE.RingGeometry(planetRadius * 0.99, planetRadius, 64, 1);
-    const rimMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.4,
-      side: THREE.DoubleSide,
-    });
-    const rimMesh = new THREE.Mesh(rimGeo, rimMat);
-    rimMesh.rotation.y = Math.PI / 2;
-    rimMesh.position.x = 0.002;
-    this.planetMesh.add(rimMesh);
-    this.layerMeshes.push({ mesh: rimMesh, data: null, radius: planetRadius, isRim: true });
+    // Two rim rings (one per cut edge)
+    this._createWedgeRims(planetRadius);
 
     // Start animation
     this._startTime = performance.now();
     this._animate();
   }
 
-  /** Create a shader-based disc showing cross-section layers at the cut plane */
-  _createCrossSectionFace(layers, maxR, planetRadius) {
-    this._faceMaterial = this._buildFaceMaterial(layers, maxR);
-    const faceGeo = new THREE.CircleGeometry(planetRadius, 64);
-    const faceMesh = new THREE.Mesh(faceGeo, this._faceMaterial);
-    faceMesh.rotation.y = Math.PI / 2;
-    faceMesh.position.x = 0.001;
-    this.planetMesh.add(faceMesh);
-    this.layerMeshes.push({ mesh: faceMesh, data: null, radius: planetRadius, isFace: true });
+  /** Create two semi-circular face discs for the wedge cutaway */
+  _createWedgeFaces(layers, maxR, planetRadius) {
+    // Face 1: X-cut face at x=0, visible in the -Z hemisphere
+    // Clipped by inversePlane2 (0,0,1,0) so only z < 0 half shows → semi-circle
+    this._faceMaterial1 = this._buildFaceMaterial(layers, maxR);
+    this._faceMaterial1.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)];
+    this._faceMaterial1.clipIntersection = false;
+
+    const faceGeo1 = new THREE.CircleGeometry(planetRadius, 64);
+    const faceMesh1 = new THREE.Mesh(faceGeo1, this._faceMaterial1);
+    faceMesh1.rotation.y = Math.PI / 2; // face along X axis
+    faceMesh1.position.x = 0.001;
+    this.planetMesh.add(faceMesh1);
+    this.layerMeshes.push({ mesh: faceMesh1, data: null, radius: planetRadius, isFace: true });
+
+    // Face 2: Z-cut face at z=0, visible in the -X hemisphere
+    // Clipped by inversePlane1 (1,0,0,0) so only x < 0 half shows → semi-circle
+    this._faceMaterial2 = this._buildFaceMaterial(layers, maxR);
+    this._faceMaterial2.clippingPlanes = [new THREE.Plane(new THREE.Vector3(1, 0, 0), 0)];
+    this._faceMaterial2.clipIntersection = false;
+
+    const faceGeo2 = new THREE.CircleGeometry(planetRadius, 64);
+    const faceMesh2 = new THREE.Mesh(faceGeo2, this._faceMaterial2);
+    faceMesh2.rotation.x = -Math.PI / 2; // face along Z axis
+    faceMesh2.position.z = 0.001;
+    this.planetMesh.add(faceMesh2);
+    this.layerMeshes.push({ mesh: faceMesh2, data: null, radius: planetRadius, isFace: true });
+  }
+
+  /** Create two semi-circular rim rings for the wedge cutaway */
+  _createWedgeRims(planetRadius) {
+    const rimGeo = new THREE.RingGeometry(planetRadius * 0.99, planetRadius, 64, 1);
+
+    // Rim 1: at x=0 cut face, clipped to z < 0 half
+    const rimMat1 = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide,
+      clippingPlanes: [new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)],
+    });
+    const rimMesh1 = new THREE.Mesh(rimGeo.clone(), rimMat1);
+    rimMesh1.rotation.y = Math.PI / 2;
+    rimMesh1.position.x = 0.002;
+    this.planetMesh.add(rimMesh1);
+    this.layerMeshes.push({ mesh: rimMesh1, data: null, radius: planetRadius, isRim: true });
+
+    // Rim 2: at z=0 cut face, clipped to x < 0 half
+    const rimMat2 = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide,
+      clippingPlanes: [new THREE.Plane(new THREE.Vector3(1, 0, 0), 0)],
+    });
+    const rimMesh2 = new THREE.Mesh(rimGeo.clone(), rimMat2);
+    rimMesh2.rotation.x = -Math.PI / 2;
+    rimMesh2.position.z = 0.002;
+    this.planetMesh.add(rimMesh2);
+    this.layerMeshes.push({ mesh: rimMesh2, data: null, radius: planetRadius, isRim: true });
   }
 
   /** Legacy mode: self-contained mini-renderer (fallback for panel-based display) */
@@ -305,17 +357,19 @@ export class CutawayRenderer {
     dirLight.position.set(3, 5, 3);
     this._legacyScene.add(dirLight);
 
-    this.clipPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0);
-
     const maxR = layers[0].r;
     const legacyRadius = 1.0;
+
+    // Two perpendicular clipping planes for wedge cutaway
+    this.clipPlane1 = new THREE.Plane(new THREE.Vector3(-1, 0, 0), legacyRadius * 1.1);
+    this.clipPlane2 = new THREE.Plane(new THREE.Vector3(0, 0, -1), legacyRadius * 1.1);
+    const clipPlanes = [this.clipPlane1, this.clipPlane2];
 
     for (let i = 0; i < layers.length; i++) {
       const layer = layers[i];
       const radius = (layer.r / maxR) * legacyRadius;
       const geo = new THREE.SphereGeometry(radius, 48, 48);
 
-      // Enhanced materials matching on-planet mode (Step 1F)
       const isCore = i === layers.length - 1;
       const isInner = i === layers.length - 2;
       const emissiveScale = isCore ? 0.5 : isInner ? 0.25 : 0.1;
@@ -323,7 +377,8 @@ export class CutawayRenderer {
         color: layer.color,
         roughness: isCore ? 0.3 : 0.7,
         metalness: isCore ? 0.3 : 0.1,
-        clippingPlanes: [this.clipPlane],
+        clippingPlanes: clipPlanes,
+        clipIntersection: true,
         clipShadows: true,
         side: THREE.DoubleSide,
         emissive: new THREE.Color(layer.color).multiplyScalar(emissiveScale),
@@ -334,33 +389,64 @@ export class CutawayRenderer {
       this.layerMeshes.push({ mesh, data: layer, radius });
     }
 
-    // Shader cross-section face for legacy mode (Step 1F)
-    this._faceMaterial = this._buildFaceMaterial(layers, maxR);
-    const faceGeo = new THREE.CircleGeometry(legacyRadius, 64);
-    const faceMesh = new THREE.Mesh(faceGeo, this._faceMaterial);
-    faceMesh.rotation.y = Math.PI / 2;
-    faceMesh.position.x = 0.001;
-    this._legacyScene.add(faceMesh);
-    this.layerMeshes.push({ mesh: faceMesh, data: null, radius: legacyRadius, isFace: true });
+    // Two shader cross-section face discs for legacy mode
+    // Face 1: X-cut face, clipped to z < 0 half
+    this._faceMaterial1 = this._buildFaceMaterial(layers, maxR);
+    this._faceMaterial1.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)];
+    this._faceMaterial1.clipIntersection = false;
+
+    const faceGeo1 = new THREE.CircleGeometry(legacyRadius, 64);
+    const faceMesh1 = new THREE.Mesh(faceGeo1, this._faceMaterial1);
+    faceMesh1.rotation.y = Math.PI / 2;
+    faceMesh1.position.x = 0.001;
+    this._legacyScene.add(faceMesh1);
+    this.layerMeshes.push({ mesh: faceMesh1, data: null, radius: legacyRadius, isFace: true });
+
+    // Face 2: Z-cut face, clipped to x < 0 half
+    this._faceMaterial2 = this._buildFaceMaterial(layers, maxR);
+    this._faceMaterial2.clippingPlanes = [new THREE.Plane(new THREE.Vector3(1, 0, 0), 0)];
+    this._faceMaterial2.clipIntersection = false;
+
+    const faceGeo2 = new THREE.CircleGeometry(legacyRadius, 64);
+    const faceMesh2 = new THREE.Mesh(faceGeo2, this._faceMaterial2);
+    faceMesh2.rotation.x = -Math.PI / 2;
+    faceMesh2.position.z = 0.001;
+    this._legacyScene.add(faceMesh2);
+    this.layerMeshes.push({ mesh: faceMesh2, data: null, radius: legacyRadius, isFace: true });
 
     // Core glow PointLight for legacy mode
     const coreColor = new THREE.Color(layers[layers.length - 1].color);
     this._coreLight = new THREE.PointLight(coreColor, 2.0, legacyRadius * 2, 2);
     this._legacyScene.add(this._coreLight);
 
-    // Rim highlight for legacy mode
+    // Two rim rings for legacy mode
     const rimGeo = new THREE.RingGeometry(legacyRadius * 0.99, legacyRadius, 64, 1);
-    const rimMat = new THREE.MeshBasicMaterial({
+
+    const rimMat1 = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
       opacity: 0.4,
       side: THREE.DoubleSide,
+      clippingPlanes: [new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)],
     });
-    const rimMesh = new THREE.Mesh(rimGeo, rimMat);
-    rimMesh.rotation.y = Math.PI / 2;
-    rimMesh.position.x = 0.002;
-    this._legacyScene.add(rimMesh);
-    this.layerMeshes.push({ mesh: rimMesh, data: null, radius: legacyRadius, isRim: true });
+    const rimMesh1 = new THREE.Mesh(rimGeo.clone(), rimMat1);
+    rimMesh1.rotation.y = Math.PI / 2;
+    rimMesh1.position.x = 0.002;
+    this._legacyScene.add(rimMesh1);
+    this.layerMeshes.push({ mesh: rimMesh1, data: null, radius: legacyRadius, isRim: true });
+
+    const rimMat2 = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide,
+      clippingPlanes: [new THREE.Plane(new THREE.Vector3(1, 0, 0), 0)],
+    });
+    const rimMesh2 = new THREE.Mesh(rimGeo.clone(), rimMat2);
+    rimMesh2.rotation.x = -Math.PI / 2;
+    rimMesh2.position.z = 0.002;
+    this._legacyScene.add(rimMesh2);
+    this.layerMeshes.push({ mesh: rimMesh2, data: null, radius: legacyRadius, isRim: true });
 
     this._createLabels(layers, maxR, height);
     this._startTime = performance.now();
@@ -392,7 +478,7 @@ export class CutawayRenderer {
 
     const now = performance.now();
     const elapsed = now - this._startTime;
-    const duration = 4000; // Snappier animation (was 6000)
+    const duration = 4000;
     const progress = Math.min(elapsed / duration, 1);
 
     // Cubic ease-in-out
@@ -401,19 +487,26 @@ export class CutawayRenderer {
       ? 4 * p * p * p
       : 1 - Math.pow(-2 * p + 2, 3) / 2;
 
-    // Animate clipping plane to reveal cross-section
-    if (this.clipPlane) {
-      this.clipPlane.constant = eased * this._getMaxRadius() * 1.1;
+    // Animate both clipping planes to reveal wedge
+    const maxRadius = this._getMaxRadius();
+    const fullOpen = maxRadius * 1.1;
+    if (this.clipPlane1 && this.clipPlane2) {
+      this.clipPlane1.constant = fullOpen - eased * fullOpen;
+      this.clipPlane2.constant = fullOpen - eased * fullOpen;
     }
 
-    // Subtle planet rotation during reveal (Step 1E)
+    // Subtle planet rotation during reveal
     if (this.planetMesh && progress < 1) {
       this.planetMesh.rotation.y += 0.002 * (1 - progress);
     }
 
-    // Update shader time uniform for shimmer
-    if (this._faceMaterial && this._faceMaterial.uniforms) {
-      this._faceMaterial.uniforms.time.value = elapsed * 0.001;
+    // Update shader time uniform for shimmer on both face materials
+    const t = elapsed * 0.001;
+    if (this._faceMaterial1 && this._faceMaterial1.uniforms) {
+      this._faceMaterial1.uniforms.time.value = t;
+    }
+    if (this._faceMaterial2 && this._faceMaterial2.uniforms) {
+      this._faceMaterial2.uniforms.time.value = t;
     }
 
     if (progress >= 1 && !this._animationComplete) {
@@ -428,7 +521,7 @@ export class CutawayRenderer {
 
     const now = performance.now();
     const elapsed = now - this._startTime;
-    const duration = 4000; // Snappier animation (was 6000)
+    const duration = 4000;
     const progress = Math.min(elapsed / duration, 1);
 
     const p = progress;
@@ -436,7 +529,12 @@ export class CutawayRenderer {
       ? 4 * p * p * p
       : 1 - Math.pow(-2 * p + 2, 3) / 2;
 
-    this.clipPlane.constant = eased * 1.2;
+    // Animate both clipping planes
+    const fullOpen = 1.1; // legacyRadius * 1.1
+    if (this.clipPlane1 && this.clipPlane2) {
+      this.clipPlane1.constant = fullOpen - eased * fullOpen;
+      this.clipPlane2.constant = fullOpen - eased * fullOpen;
+    }
 
     // Stagger label reveal
     for (let i = 0; i < this._labelElements.length; i++) {
@@ -453,9 +551,13 @@ export class CutawayRenderer {
       this._legacyScene.rotation.y += 0.004;
     }
 
-    // Update shader time uniform for shimmer
-    if (this._faceMaterial && this._faceMaterial.uniforms) {
-      this._faceMaterial.uniforms.time.value = elapsed * 0.001;
+    // Update shader time uniform for shimmer on both face materials
+    const t = elapsed * 0.001;
+    if (this._faceMaterial1 && this._faceMaterial1.uniforms) {
+      this._faceMaterial1.uniforms.time.value = t;
+    }
+    if (this._faceMaterial2 && this._faceMaterial2.uniforms) {
+      this._faceMaterial2.uniforms.time.value = t;
     }
 
     if (this._legacyControls) this._legacyControls.update();
@@ -501,10 +603,14 @@ export class CutawayRenderer {
       this._coreLight = null;
     }
 
-    // Dispose face shader material
-    if (this._faceMaterial) {
-      this._faceMaterial.dispose();
-      this._faceMaterial = null;
+    // Dispose face shader materials
+    if (this._faceMaterial1) {
+      this._faceMaterial1.dispose();
+      this._faceMaterial1 = null;
+    }
+    if (this._faceMaterial2) {
+      this._faceMaterial2.dispose();
+      this._faceMaterial2 = null;
     }
 
     // Remove layer meshes from planet
@@ -536,6 +642,7 @@ export class CutawayRenderer {
     }
 
     this._labelElements = [];
-    this.clipPlane = null;
+    this.clipPlane1 = null;
+    this.clipPlane2 = null;
   }
 }

@@ -18,8 +18,8 @@ export class AsteroidBelt {
     this._quality = isMobile ? 'low' : 'high';
   }
 
-  createMainBelt(innerRadius = 50, outerRadius = 58, count = 15000) {
-    if (this._quality === 'low') count = 8000;
+  createMainBelt(innerRadius = 50, outerRadius = 58, count = 3000) {
+    if (this._quality === 'low') count = 1500;
 
     this._mainBeltGroup = new THREE.Group();
 
@@ -112,7 +112,7 @@ export class AsteroidBelt {
       );
 
       // Power-law scale with aspect ratio variation
-      const baseScale = 0.06 + Math.pow(Math.random(), 4) * 0.25;
+      const baseScale = 0.08 + Math.pow(Math.random(), 4) * 0.35;
       const aspectX = 0.7 + Math.random() * 0.6;
       const aspectY = 0.7 + Math.random() * 0.6;
       const aspectZ = 0.7 + Math.random() * 0.6;
@@ -134,7 +134,7 @@ export class AsteroidBelt {
     }
   }
 
-  createKuiperBelt(innerRadius = 128, outerRadius = 165, count = 8000) {
+  createKuiperBelt(innerRadius = 128, outerRadius = 165, count = 2000) {
     this.kuiperBelt = this._createPointsBelt(innerRadius, outerRadius, count, 5.0, 'kuiper');
     this.scene.add(this.kuiperBelt);
   }
