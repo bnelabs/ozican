@@ -176,9 +176,23 @@ export const ui_tr = {
   'info.showMore': 'Daha fazlası',
   'info.showLess': 'Daha az',
 
-  // Cross-section / Cutaway
+  // Cross-section / Cutaway (eski anahtarlar)
   'cutaway.show': 'Kesiti Göster',
   'cutaway.hide': 'Kesiti Gizle',
+
+  // Cross-Section Viewer (yeni tam ekran görünümü)
+  'cs.viewInterior': 'İç Yapıyı Gör ◉',
+  'cs.close': 'İç yapı görünümünü kapat',
+  'cs.noData': 'Bu cisim için iç yapı verisi mevcut değil.',
+  'cs.opened': 'İç yapı kesit görünümü açıldı:',
+  'cs.closed': 'İç yapı kesit görünümü kapatıldı.',
+  'cs.layersLabel': 'Yüzeyden merkeze jeolojik katmanlar',
+  'cs.thickness': 'Kalınlık',
+  'cs.temperature': 'Sıcaklık',
+  'cs.pressure': 'Basınç',
+  'cs.state': 'Durum',
+  'cs.composition': 'Bileşim',
+  'cs.funFact': 'Biliyor musunuz?',
 
   // Mission UI
   'nav.missions': 'Görevler',

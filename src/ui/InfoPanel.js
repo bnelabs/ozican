@@ -61,10 +61,9 @@ export function renderCompactPlanetInfo(key) {
 
   let cutawayBtn = '';
   if (PLANET_LAYERS[key]) {
-    cutawayBtn = `<button class="cutaway-toggle compact-cutaway" id="cutaway-btn" data-planet="${key}">
-      ${t('cutaway.show')}
-    </button>
-    <div id="cutaway-container" style="display:none;"></div>`;
+    cutawayBtn = `<button class="cs-btn compact-cs-btn" id="cutaway-btn" data-planet="${escapeHTML(key)}">
+      ${escapeHTML(t('cs.viewInterior'))}
+    </button>`;
   }
 
   return `
@@ -193,13 +192,14 @@ export function renderPlanetInfo(key) {
     </div>`;
   }
 
-  // Internal structure cutaway (3D renderer)
-  html += `<div class="info-section fade-in">
-    <button class="cutaway-toggle" id="cutaway-btn" data-planet="${key}">
-      ${t('cutaway.show')}
-    </button>
-    <div id="cutaway-container" style="display:none;"></div>
-  </div>`;
+  // Internal structure cross-section button
+  if (PLANET_LAYERS[key]) {
+    html += `<div class="info-section fade-in">
+      <button class="cs-btn" id="cutaway-btn" data-planet="${escapeHTML(key)}">
+        ${escapeHTML(t('cs.viewInterior'))}
+      </button>
+    </div>`;
+  }
 
   // Description
   if (data.description) {

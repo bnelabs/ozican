@@ -27,7 +27,7 @@ import { renderPlanetInfo, renderCompactPlanetInfo, renderMoonInfo } from './ui/
 import { renderCompareTable, renderCompareCards } from './ui/ComparePanel.js';
 import { renderMissionList, renderMissionDetail, renderMissionHUD, renderWaypointCard } from './ui/MissionPanel.js';
 import { MissionRenderer } from './scene/MissionRenderer.js';
-import { CutawayRenderer } from './ui/CutawayRenderer.js';
+import { CrossSectionViewer } from './ui/CrossSectionViewer.js';
 import { SolarStormSimulation } from './scene/SolarStormSimulation.js';
 import { audioManager } from './audio/AudioManager.js';
 import { CinematicTour } from './scene/CinematicTour.js';
@@ -179,7 +179,7 @@ const speedKeys = ['speed.paused', 'speed.025x', 'speed.1x', 'speed.3x', 'speed.
 let labelsVisible = true;
 let keyboardHelpVisible = false;
 let waypointCardTimeout = null;
-let activeCutaway = null;
+let crossSectionViewer = null;
 let solarStorm = null;
 
 // Quiz state
@@ -397,15 +397,10 @@ function startApp() {
         cinematicTour = new CinematicTour(scene);
         cinematicTour.onPlanetVisit = (key) => {
           openInfoPanel(key);
-          // Auto-trigger cutaway after camera settles
+          // Auto-open cross-section after camera settles
           setTimeout(() => {
             if (!cinematicTour?.isActive) return;
-            disposeCutaway();
-            activeCutaway = createCutawayForPlanet(
-              document.getElementById('cutaway-container') || document.createElement('div'),
-              key
-            );
-            activeCutaway.init();
+            if (crossSectionViewer) crossSectionViewer.open(key);
           }, 800);
         };
         cinematicTour.onPlanetLeave = () => disposeCutaway();
@@ -434,6 +429,9 @@ function startApp() {
     showError(t('error.webgl'));
     return;
   }
+
+  // Initialize CrossSectionViewer singleton
+  crossSectionViewer = new CrossSectionViewer(announce);
 
   // Listen for scene errors
   document.addEventListener('scene-error', (e) => {
@@ -692,32 +690,9 @@ function wireSceneCallbacks() {
 // ==================== Info Panel ====================
 
 function disposeCutaway() {
-  if (activeCutaway) {
-    activeCutaway.dispose();
-    activeCutaway = null;
+  if (crossSectionViewer) {
+    crossSectionViewer.close();
   }
-  const container = document.getElementById('cutaway-container');
-  if (container) container.innerHTML = '';
-}
-
-/** Get the planet mesh and renderer for on-planet cutaway rendering */
-function getPlanetMeshForCutaway(planetKey) {
-  if (!scene) return { mesh: null, renderer: null };
-  // Look up the actual 3D mesh in the scene
-  const planet = scene.planets[planetKey] || scene.dwarfPlanets?.[planetKey];
-  const mesh = planet ? planet.mesh : null;
-  const renderer = scene.renderer || null;
-  return { mesh, renderer };
-}
-
-function createCutawayForPlanet(container, planetKey) {
-  const { mesh, renderer } = getPlanetMeshForCutaway(planetKey);
-  if (mesh && renderer) {
-    // On-planet mode: render cross-section on the actual 3D planet
-    return new CutawayRenderer(container, planetKey, mesh, renderer);
-  }
-  // Fallback: legacy mini-renderer mode
-  return new CutawayRenderer(container, planetKey);
 }
 
 function wireInfoPanelHandlers() {
@@ -731,23 +706,12 @@ function wireInfoPanelHandlers() {
     });
   });
 
-  // Wire up cutaway toggle (3D renderer)
+  // Wire up cross-section viewer button
   const cutawayBtn = document.getElementById('cutaway-btn');
-  const cutawayContainer = document.getElementById('cutaway-container');
-  if (cutawayBtn && cutawayContainer) {
+  if (cutawayBtn) {
     cutawayBtn.addEventListener('click', () => {
-      const isHidden = cutawayContainer.style.display === 'none';
-      if (isHidden) {
-        disposeCutaway();
-        activeCutaway = createCutawayForPlanet(cutawayContainer, cutawayBtn.dataset.planet);
-        activeCutaway.init();
-        cutawayContainer.style.display = '';
-        cutawayBtn.textContent = t('cutaway.hide');
-      } else {
-        disposeCutaway();
-        cutawayContainer.style.display = 'none';
-        cutawayBtn.textContent = t('cutaway.show');
-      }
+      const key = cutawayBtn.dataset.planet;
+      if (crossSectionViewer) crossSectionViewer.open(key);
     });
   }
 }
@@ -813,23 +777,12 @@ function wireCompactHandlers(key) {
     }
   }
 
-  // Wire cutaway toggle in compact view
+  // Wire cross-section viewer button in compact view
   const cutawayBtn = document.getElementById('cutaway-btn');
-  const cutawayContainer = document.getElementById('cutaway-container');
-  if (cutawayBtn && cutawayContainer) {
+  if (cutawayBtn) {
     cutawayBtn.addEventListener('click', () => {
-      const isHidden = cutawayContainer.style.display === 'none';
-      if (isHidden) {
-        disposeCutaway();
-        activeCutaway = createCutawayForPlanet(cutawayContainer, cutawayBtn.dataset.planet);
-        activeCutaway.init();
-        cutawayContainer.style.display = '';
-        cutawayBtn.textContent = t('cutaway.hide');
-      } else {
-        disposeCutaway();
-        cutawayContainer.style.display = 'none';
-        cutawayBtn.textContent = t('cutaway.show');
-      }
+      const key = cutawayBtn.dataset.planet;
+      if (crossSectionViewer) crossSectionViewer.open(key);
     });
   }
 }
@@ -898,23 +851,12 @@ function openMoonInfoPanel(planetKey, moonIndex) {
     nextBtn.style.opacity = '0.3';
   }
 
-  // Wire cutaway toggle for moons with layer data
+  // Wire cross-section viewer button for moons
   const cutawayBtn = document.getElementById('cutaway-btn');
-  const cutawayContainer = document.getElementById('cutaway-container');
-  if (cutawayBtn && cutawayContainer) {
+  if (cutawayBtn) {
     cutawayBtn.addEventListener('click', () => {
-      const isHidden = cutawayContainer.style.display === 'none';
-      if (isHidden) {
-        disposeCutaway();
-        activeCutaway = createCutawayForPlanet(cutawayContainer, cutawayBtn.dataset.planet);
-        activeCutaway.init();
-        cutawayContainer.style.display = '';
-        cutawayBtn.textContent = t('cutaway.hide');
-      } else {
-        disposeCutaway();
-        cutawayContainer.style.display = 'none';
-        cutawayBtn.textContent = t('cutaway.show');
-      }
+      const key = cutawayBtn.dataset.planet;
+      if (crossSectionViewer) crossSectionViewer.open(key);
     });
   }
 }
@@ -1658,15 +1600,10 @@ if (btnTour) {
       cinematicTour = new CinematicTour(scene);
       cinematicTour.onPlanetVisit = (key) => {
         openInfoPanel(key);
-        // Auto-trigger cutaway after camera settles
+        // Auto-open cross-section after camera settles
         setTimeout(() => {
           if (!cinematicTour?.isActive) return;
-          disposeCutaway();
-          activeCutaway = createCutawayForPlanet(
-            document.getElementById('cutaway-container') || document.createElement('div'),
-            key
-          );
-          activeCutaway.init();
+          if (crossSectionViewer) crossSectionViewer.open(key);
         }, 800);
       };
       cinematicTour.onPlanetLeave = () => disposeCutaway();

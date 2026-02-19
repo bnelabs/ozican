@@ -305,6 +305,27 @@
   <!-- Tooltip -->
   <div id="tooltip" class="hidden" aria-live="polite"></div>
 
+  <!-- Cross-Section Viewer overlay (full-screen cinematic interior view) -->
+  <div id="cs-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="cs-body-name" aria-hidden="true">
+    <div id="cs-header">
+      <h2 id="cs-body-name"></h2>
+      <button id="cs-close" aria-label="Close interior view">&times;</button>
+    </div>
+    <canvas id="cs-canvas" aria-hidden="true"></canvas>
+    <div id="cs-labels" aria-hidden="true"></div>
+    <ul id="cs-sr-layers" class="sr-only"></ul>
+    <div id="cs-detail-card" class="hidden" role="region" aria-label="Layer details">
+      <div id="cs-detail-card-inner">
+        <div id="cs-detail-header">
+          <span id="cs-detail-dot"></span>
+          <span id="cs-detail-name"></span>
+          <button id="cs-detail-close" aria-label="Close layer details">&times;</button>
+        </div>
+        <div id="cs-detail-body"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Screen reader live region for dynamic announcements -->
   <div id="sr-announcer" aria-live="polite" aria-atomic="true" class="sr-only"></div>
 

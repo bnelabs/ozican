@@ -176,9 +176,23 @@ export const ui_en = {
   'info.showMore': 'More details',
   'info.showLess': 'Show less',
 
-  // Cross-section / Cutaway
+  // Cross-section / Cutaway (legacy keys kept for any remaining references)
   'cutaway.show': 'Show Cross-Section',
   'cutaway.hide': 'Hide Cross-Section',
+
+  // Cross-Section Viewer (new full-screen overlay)
+  'cs.viewInterior': 'View Interior ◉',
+  'cs.close': 'Close interior view',
+  'cs.noData': 'No interior data available for this body.',
+  'cs.opened': 'Interior cross-section opened for',
+  'cs.closed': 'Interior cross-section closed.',
+  'cs.layersLabel': 'Geological layers from surface to centre',
+  'cs.thickness': 'Thickness',
+  'cs.temperature': 'Temperature',
+  'cs.pressure': 'Pressure',
+  'cs.state': 'State',
+  'cs.composition': 'Composition',
+  'cs.funFact': 'Did you know?',
 
   // Mission UI
   'nav.missions': 'Missions',
