@@ -140,16 +140,12 @@ export class ISSTracker {
       if (this.orbitLine) this.orbitLine.visible = shouldShow && this._visible;
     }
 
-    // --- Orbital motion ---
-    // Real ISS period is 92.65 minutes; we speed it up dramatically
-    // so the orbit is clearly visible (~12.5 s per revolution).
+    // --- Orbital motion (physics-accurate) ---
+    // Earth rotationSpeed = 0.01 rad/sim-unit → 1 Earth day = 2π/0.01 ≈ 628 sim-units.
+    // ISS period = 92.65 min = 0.06434 days → 40.4 sim-units → ω = 2π/40.4 ≈ 0.1555 rad/unit.
+    // This means the ISS completes ~15.5 orbits per simulated Earth day — matching reality.
     if (this.orbitGroup) {
-      this.orbitGroup.rotation.y += delta * 0.5;
-    }
-
-    // Slight self-rotation on the ISS model for visual interest
-    if (this.issMesh) {
-      this.issMesh.rotation.y += delta * 0.1;
+      this.orbitGroup.rotation.y += delta * 0.1555;
     }
   }
 

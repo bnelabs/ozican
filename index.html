@@ -90,6 +90,7 @@
     <div class="nav-controls" id="nav-controls">
       <div class="nav-group" data-group-label="Explore">
         <button id="btn-overview" class="nav-btn active" title="Solar System Overview" aria-label="Solar System Overview" data-i18n="nav.overview">Overview</button>
+        <button id="btn-recenter" class="nav-btn" title="Re-centre on Sun" aria-label="Re-centre on Sun" data-i18n="nav.recenter">Re-centre</button>
         <button id="btn-compare" class="nav-btn" title="Compare Planets" aria-label="Compare Planets" aria-pressed="false" data-i18n="nav.compare">Compare</button>
         <button id="btn-missions" class="nav-btn" title="NASA Missions" aria-label="NASA Missions">
           <span class="nav-icon">&#128640;</span> <span class="nav-btn-text" data-i18n="nav.missions">Missions</span>
@@ -146,9 +147,17 @@
   <div id="music-panel" class="hidden" role="dialog" aria-label="Music Settings" aria-hidden="true">
     <h3 data-i18n="music.title">Music</h3>
     <div class="music-tracks">
-      <button class="music-track active" data-track="calm">
+      <button class="music-track" data-track="calm">
         <span class="music-track-icon">&#127925;</span>
         <span data-i18n="music.calm">Calm</span>
+      </button>
+      <button class="music-track active" data-track="landing">
+        <span class="music-track-icon">&#127759;</span>
+        <span data-i18n="music.landing">Interstellar Odyssey</span>
+      </button>
+      <button class="music-track" data-track="navigation">
+        <span class="music-track-icon">&#128640;</span>
+        <span data-i18n="music.navigation">Epic Journey</span>
       </button>
       <button class="music-track" data-track="epic">
         <span class="music-track-icon">&#127926;</span>
@@ -305,26 +314,42 @@
   <!-- Tooltip -->
   <div id="tooltip" class="hidden" aria-live="polite"></div>
 
-  <!-- Cross-Section Viewer overlay (full-screen cinematic interior view) -->
+  <!-- Cross-Section Viewer — split: 3D sphere left, layer info sidebar right -->
   <div id="cs-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="cs-body-name" aria-hidden="true">
     <div id="cs-header">
-      <h2 id="cs-body-name"></h2>
+      <div id="cs-header-left">
+        <span id="cs-layer-count"></span>
+        <h2 id="cs-body-name"></h2>
+      </div>
       <button id="cs-close" aria-label="Close interior view">&times;</button>
     </div>
-    <canvas id="cs-canvas" aria-hidden="true"></canvas>
-    <div id="cs-labels" aria-hidden="true"></div>
+    <div id="cs-body">
+      <canvas id="cs-canvas" aria-hidden="true"></canvas>
+      <svg id="cs-connectors" aria-hidden="true"></svg>
+      <div id="cs-sidebar" role="complementary">
+        <div class="cs-sidebar-heading" data-i18n="cs.layers"></div>
+        <div id="cs-layers-list"></div>
+        <div id="cs-detail-panel" class="hidden"></div>
+      </div>
+    </div>
     <ul id="cs-sr-layers" class="sr-only"></ul>
-    <div id="cs-detail-card" class="hidden" role="region" aria-label="Layer details">
-      <div id="cs-detail-card-inner">
-        <div id="cs-detail-header">
-          <span id="cs-detail-dot"></span>
-          <span id="cs-detail-name"></span>
-          <button id="cs-detail-close" aria-label="Close layer details">&times;</button>
-        </div>
-        <div id="cs-detail-body"></div>
+  </div>
+
+  <!-- Flyby HUD overlay -->
+  <div id="flyby-hud" class="hidden" role="dialog" aria-label="Flyby Controls" aria-hidden="true">
+    <div class="flyby-hud-inner">
+      <div class="flyby-hud-title">🚀 Flyby</div>
+      <div class="flyby-hud-timer"><span id="flyby-elapsed">25.0s</span></div>
+      <div class="flyby-hud-controls">
+        <button id="flyby-pause" class="flyby-ctrl-btn" aria-label="Pause flyby">Pause</button>
+        <button id="flyby-repeat" class="flyby-ctrl-btn" aria-label="Repeat flyby">Repeat</button>
+        <button id="flyby-exit" class="flyby-ctrl-btn flyby-exit-btn" aria-label="Exit flyby">Exit</button>
       </div>
     </div>
   </div>
+
+  <!-- Flyby cinematic letterbox bars -->
+  <div id="flyby-letterbox" aria-hidden="true"></div>
 
   <!-- Screen reader live region for dynamic announcements -->
   <div id="sr-announcer" aria-live="polite" aria-atomic="true" class="sr-only"></div>

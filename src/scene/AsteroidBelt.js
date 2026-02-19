@@ -18,19 +18,26 @@ export class AsteroidBelt {
     this._quality = isMobile ? 'low' : 'high';
   }
 
-  createMainBelt(innerRadius = 50, outerRadius = 58, count = 3000) {
-    if (this._quality === 'low') count = 1000;
+  createMainBelt(innerRadius = 50, outerRadius = 58, count = 500) {
+    if (this._quality === 'low') count = 180;
 
     this._mainBeltGroup = new THREE.Group();
 
-    // Two geometry variants: rounded and angular (detail 2 = 162 verts for realistic shapes)
-    const geoRounded = this._createDeformedIcosahedron(1, 2, 42, 0.55, 1.45);
-    const geoAngular = this._createDeformedIcosahedron(1, 2, 99, 0.45, 1.55);
+    // Two geometry variants: rounded (gentle bumps) and angular (sharper facets)
+    const geoRounded = this._createDeformedIcosahedron(1, 2, 42);             // 0.80–1.20
+    const geoAngular = this._createDeformedIcosahedron(1, 2, 99, 0.74, 1.26); // slightly wider
 
-    // Shared material: smooth-shaded PBR for realistic rock appearance
+    // Shared material: PBR rock base; moon texture loaded async for photographic detail
     const mat = new THREE.MeshStandardMaterial({
       roughness: 0.92,
       metalness: 0.08,
+    });
+    // Load moon texture once — each instance's spectral color (instanceColor) tints it
+    new THREE.TextureLoader().load('/textures/moon_2k.jpg', (moonTex) => {
+      moonTex.wrapS = THREE.RepeatWrapping;
+      moonTex.wrapT = THREE.RepeatWrapping;
+      mat.map = moonTex;
+      mat.needsUpdate = true;
     });
 
     // 65/35 split
@@ -62,26 +69,23 @@ export class AsteroidBelt {
     this.scene.add(this._mainBeltGroup);
   }
 
-  _createDeformedIcosahedron(radius, detail, seed, noiseMin = 0.55, noiseMax = 1.45) {
+  _createDeformedIcosahedron(radius, detail, seed, noiseMin = 0.80, noiseMax = 1.20) {
     const geo = new THREE.IcosahedronGeometry(radius, detail);
     const pos = geo.attributes.position;
-    // Apply noise deformation to each vertex for realistic rocky shapes
-    let s = seed;
-    const rand = () => { s = (s * 16807 + 0) % 2147483647; return s / 2147483647; };
     const range = noiseMax - noiseMin;
+    // Seed-dependent offsets so the two geometry variants look distinct
+    const ox = (seed % 97)  * 0.137;
+    const oy = (seed % 113) * 0.191;
     for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i);
-      const y = pos.getY(i);
-      const z = pos.getZ(i);
-      const len = Math.sqrt(x * x + y * y + z * z);
-      // Multi-octave noise for realistic surface variation
-      const n1 = rand(); // large-scale shape
-      const n2 = rand() * 0.3; // medium bumps
-      const noise = noiseMin + n1 * range + n2 * (range * 0.3);
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      const len = Math.sqrt(x * x + y * y + z * z) || 1;
+      const nx = x / len, ny = y / len, nz = z / len;
+      // Position-coherent noise using 3D surface coords — no UV-seam spikes
+      const f1 = this._valueNoise(nx * 2.1 + nz * 0.7 + ox, ny * 2.1 + nz * 0.5 + oy);
+      const f2 = this._valueNoise(nx * 4.3 + ny * 0.8 + ox, nz * 4.3 + nx * 0.6 + oy) * 0.40;
+      const noise = noiseMin + ((f1 + f2) / 1.4) * range;
       const clamped = Math.max(noiseMin, Math.min(noiseMax, noise));
-      const newLen = len * clamped;
-      const scale = newLen / (len || 1);
-      pos.setXYZ(i, x * scale, y * scale, z * scale);
+      pos.setXYZ(i, x * clamped, y * clamped, z * clamped);
     }
     geo.computeVertexNormals();
     return geo;
@@ -116,8 +120,8 @@ export class AsteroidBelt {
         Math.random() * Math.PI * 2
       );
 
-      // Power-law scale with aspect ratio variation
-      const baseScale = 0.08 + Math.pow(Math.random(), 4) * 0.35;
+      // Power-law scale: mostly tiny, very few large — keeps belt visually sparse
+      const baseScale = 0.04 + Math.pow(Math.random(), 4) * 0.12;
       const aspectX = 0.7 + Math.random() * 0.6;
       const aspectY = 0.7 + Math.random() * 0.6;
       const aspectZ = 0.7 + Math.random() * 0.6;
@@ -147,7 +151,9 @@ export class AsteroidBelt {
     }
   }
 
-  createKuiperBelt(innerRadius = 140, outerRadius = 180, count = 2000) {
+  createKuiperBelt(innerRadius = 140, outerRadius = 180, count = 40) {
+    // Real Kuiper belt is vastly sparser than the asteroid belt — just a thin distant scatter.
+    if (this._quality === 'low') count = 18;
     this.kuiperBelt = this._createPointsBelt(innerRadius, outerRadius, count, 5.0, 'kuiper');
     this.scene.add(this.kuiperBelt);
   }
@@ -182,14 +188,14 @@ export class AsteroidBelt {
     const pointTexture = new THREE.CanvasTexture(this._createIcySprite());
 
     const mat = new THREE.PointsMaterial({
-      size: 0.4,
+      size: 0.18,           // reduced from 0.55 — distant icy specks, not inflated blobs
       sizeAttenuation: true,
       map: pointTexture,
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       vertexColors: true,
-      opacity: 0.4,
+      opacity: 0.50,
       alphaTest: 0.01,
     });
 
@@ -223,7 +229,6 @@ export class AsteroidBelt {
       const data = ASTEROIDS[key];
       if (!data) continue;
 
-      // Follow dwarf planet pattern: orbitGroup → tiltGroup → mesh
       const orbitGroup = new THREE.Group();
       this.scene.add(orbitGroup);
 
@@ -231,579 +236,477 @@ export class AsteroidBelt {
       tiltGroup.rotation.x = THREE.MathUtils.degToRad(data.orbitInclination || 0);
       orbitGroup.add(tiltGroup);
 
-      // Create unique procedural geometry per asteroid
-      const geo = this._createAsteroidGeometry(key);
-      const mat = this._generateAsteroidMaterial(key, data);
+      const config = this._getAsteroidConfig(key);
+      const geo    = this._createAsteroidGeometry(key);
+      const mat    = this._generateAsteroidMaterial(key);  // canvas textures generated here
 
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.x = data.orbitRadius;
       mesh.rotation.z = THREE.MathUtils.degToRad(data.axialTilt || 0);
-      mesh.userData = { key, type: 'planet' };
+      mesh.userData   = { key, type: 'planet' };
 
-      // Scale mesh to displayRadius
-      const currentSize = this._getGeoBoundingRadius(geo);
-      const targetSize = data.displayRadius;
-      const s = targetSize / currentSize;
-      mesh.scale.set(s, s, s);
+      // Uniform scale to reach displayRadius, then apply per-axis elongation from config
+      geo.computeBoundingSphere();
+      const s  = data.displayRadius / geo.boundingSphere.radius;
+      const cs = config.scale || [1, 1, 1];
+      mesh.scale.set(s * cs[0], s * cs[1], s * cs[2]);
 
       tiltGroup.add(mesh);
-
-      this._notableAsteroids[key] = {
-        mesh,
-        orbitGroup,
-        tiltGroup,
-        data,
-      };
+      this._notableAsteroids[key] = { mesh, orbitGroup, tiltGroup, data };
     }
   }
 
-  _getGeoBoundingRadius(geo) {
-    geo.computeBoundingSphere();
-    return geo.boundingSphere.radius;
-  }
-
-  _createAsteroidGeometry(key) {
-    switch (key) {
-      case 'vesta': return this._createVestaGeometry();
-      case 'pallas': return this._createPallasGeometry();
-      case 'hygiea': return this._createHygieaGeometry();
-      case 'juno': return this._createJunoGeometry();
-      case 'eros': return this._createErosGeometry();
-      default: return new THREE.IcosahedronGeometry(1, 4);
-    }
-  }
-
-  /** Vesta: sphere with south pole basin (Rheasilvia) + central peak + noise */
-  _createVestaGeometry() {
-    const geo = new THREE.IcosahedronGeometry(1, 4);
-    const pos = geo.attributes.position;
-    let seed = 4242;
-    const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
-
-    for (let i = 0; i < pos.count; i++) {
-      let x = pos.getX(i);
-      let y = pos.getY(i);
-      let z = pos.getZ(i);
-      const len = Math.sqrt(x * x + y * y + z * z);
-      const nx = x / len, ny = y / len, nz = z / len;
-
-      // South pole angle (y < 0)
-      const southAngle = Math.acos(Math.max(-1, Math.min(1, -ny)));
-      let r = len;
-
-      // Rheasilvia basin: depression in the south
-      if (southAngle < 0.6) {
-        const basinDepth = 0.15 * (1 - southAngle / 0.6);
-        r -= basinDepth;
-        // Central peak
-        if (southAngle < 0.12) {
-          r += 0.08 * (1 - southAngle / 0.12);
-        }
-      }
-
-      // Surface noise
-      r *= (0.92 + rand() * 0.16);
-
-      const s = r / len;
-      pos.setXYZ(i, x * s, y * s, z * s);
-    }
-    geo.computeVertexNormals();
-    return geo;
-  }
-
-  /** Pallas: oblate sphere with crater depressions + heavy noise */
-  _createPallasGeometry() {
-    const geo = new THREE.IcosahedronGeometry(1, 4);
-    const pos = geo.attributes.position;
-    let seed = 1802;
-    const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
-
-    // Pre-generate crater positions
-    const craters = [];
-    for (let c = 0; c < 6; c++) {
-      const theta = rand() * Math.PI * 2;
-      const phi = Math.acos(2 * rand() - 1);
-      craters.push({
-        x: Math.sin(phi) * Math.cos(theta),
-        y: Math.sin(phi) * Math.sin(theta),
-        z: Math.cos(phi),
-        radius: 0.2 + rand() * 0.3,
-        depth: 0.05 + rand() * 0.08,
-      });
-    }
-
-    for (let i = 0; i < pos.count; i++) {
-      let x = pos.getX(i);
-      let y = pos.getY(i);
-      let z = pos.getZ(i);
-      const len = Math.sqrt(x * x + y * y + z * z);
-      const nx = x / len, ny = y / len, nz = z / len;
-
-      // Oblate (squash y by 10%)
-      let r = len * (1 - 0.1 * ny * ny);
-
-      // Crater depressions
-      for (const cr of craters) {
-        const dot = nx * cr.x + ny * cr.y + nz * cr.z;
-        const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
-        if (angle < cr.radius) {
-          r -= cr.depth * (1 - angle / cr.radius);
-        }
-      }
-
-      // Heavy noise
-      r *= (0.88 + rand() * 0.24);
-
-      const s = r / len;
-      pos.setXYZ(i, x * s, y * s, z * s);
-    }
-    geo.computeVertexNormals();
-    return geo;
-  }
-
-  /** Hygiea: nearly spherical with very mild noise */
-  _createHygieaGeometry() {
-    const geo = new THREE.IcosahedronGeometry(1, 4);
-    const pos = geo.attributes.position;
-    let seed = 2019;
-    const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
-
-    for (let i = 0; i < pos.count; i++) {
-      let x = pos.getX(i);
-      let y = pos.getY(i);
-      let z = pos.getZ(i);
-      const len = Math.sqrt(x * x + y * y + z * z);
-
-      // Very mild deformation — nearly spherical
-      const r = len * (0.97 + rand() * 0.06);
-      const s = r / len;
-      pos.setXYZ(i, x * s, y * s, z * s);
-    }
-    geo.computeVertexNormals();
-    return geo;
-  }
-
-  /** Juno: slightly elongated with crater depressions */
-  _createJunoGeometry() {
-    const geo = new THREE.IcosahedronGeometry(1, 4);
-    const pos = geo.attributes.position;
-    let seed = 1804;
-    const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
-
-    // Craters
-    const craters = [];
-    for (let c = 0; c < 4; c++) {
-      const theta = rand() * Math.PI * 2;
-      const phi = Math.acos(2 * rand() - 1);
-      craters.push({
-        x: Math.sin(phi) * Math.cos(theta),
-        y: Math.sin(phi) * Math.sin(theta),
-        z: Math.cos(phi),
-        radius: 0.25 + rand() * 0.2,
-        depth: 0.06 + rand() * 0.06,
-      });
-    }
-
-    for (let i = 0; i < pos.count; i++) {
-      let x = pos.getX(i);
-      let y = pos.getY(i);
-      let z = pos.getZ(i);
-      const len = Math.sqrt(x * x + y * y + z * z);
-      const nx = x / len, ny = y / len, nz = z / len;
-
-      // Elongate along X axis
-      let r = len;
-
-      // Crater depressions
-      for (const cr of craters) {
-        const dot = nx * cr.x + ny * cr.y + nz * cr.z;
-        const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
-        if (angle < cr.radius) {
-          r -= cr.depth * (1 - angle / cr.radius);
-        }
-      }
-
-      // Moderate noise — angular feel preserved by low-detail icosahedron
-      r *= (0.90 + rand() * 0.20);
-
-      const s = r / len;
-      // Elongation: stretch x by 1.2
-      pos.setXYZ(i, x * s * 1.2, y * s, z * s);
-    }
-    geo.computeVertexNormals();
-    return geo;
-  }
-
-  /** Eros: peanut/bi-lobed shape via waist pinch + X-axis elongation */
-  _createErosGeometry() {
-    const geo = new THREE.IcosahedronGeometry(1, 4);
-    const pos = geo.attributes.position;
-    let seed = 2000;
-    const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
-
-    for (let i = 0; i < pos.count; i++) {
-      let x = pos.getX(i);
-      let y = pos.getY(i);
-      let z = pos.getZ(i);
-      const len = Math.sqrt(x * x + y * y + z * z);
-      const nx = x / len, ny = y / len, nz = z / len;
-
-      let r = len;
-
-      // Waist pinch: suppress radius near the equatorial center (nx ~ 0)
-      const pinch = 1 - 0.3 * Math.exp(-nx * nx / 0.08);
-      r *= pinch;
-
-      // Surface noise
-      r *= (0.90 + rand() * 0.20);
-
-      const s = r / len;
-      // Elongate along X by 1.5 for peanut shape
-      pos.setXYZ(i, x * s * 1.5, y * s * 0.85, z * s * 0.85);
-    }
-    geo.computeVertexNormals();
-    return geo;
-  }
-
-  // ==================== Procedural Asteroid Materials ====================
+  // ─── Per-asteroid configuration ─────────────────────────────────────────────
 
   /**
-   * Per-asteroid crater definitions (UV space, 0-1 range).
-   * Each crater: { u, v, r, depth, ejecta }
-   *   u, v: centre position in UV equirectangular (0-1)
-   *   r: radius (fraction of texture width)
-   *   depth: darkening factor for floor (0-1)
-   *   ejecta: rim brightness factor
+   * Returns spectral type, base colour, elongation scale, and crater array.
+   * Craters use standard spherical convention:
+   *   d = direction vector, radius = angular radius (rad),
+   *   depth = floor darkness, ejecta = rim brightness.
    */
-  _getCraterConfig(key) {
+  _getAsteroidConfig(key) {
+    // dir(lat_deg, lon_deg) → unit direction vector
+    const d = (lat, lon) => {
+      const la = lat * Math.PI / 180;
+      const lo = lon * Math.PI / 180;
+      const th = Math.PI / 2 - la;
+      return [Math.sin(th) * Math.cos(lo), Math.cos(th), Math.sin(th) * Math.sin(lo)];
+    };
+
     switch (key) {
       case 'vesta':
         return {
           spectralType: 'V',
-          baseRgb: [160, 152, 136],
+          baseRgb: [0.50, 0.46, 0.40],
+          scale: [1.0, 1.0, 1.0],
           craters: [
-            // Rheasilvia — huge south-pole basin
-            { u: 0.50, v: 0.82, r: 0.30, depth: 0.55, ejecta: 0.35 },
-            // Veneneia — overlapping old basin
-            { u: 0.30, v: 0.72, r: 0.20, depth: 0.45, ejecta: 0.25 },
-            // Olbers (bright rays)
-            { u: 0.70, v: 0.28, r: 0.07, depth: 0.30, ejecta: 0.55 },
-            // Smaller craters
-            { u: 0.20, v: 0.45, r: 0.05, depth: 0.35, ejecta: 0.30 },
-            { u: 0.80, v: 0.55, r: 0.04, depth: 0.30, ejecta: 0.28 },
-            { u: 0.45, v: 0.38, r: 0.06, depth: 0.32, ejecta: 0.25 },
+            { d: d(-85,   0), radius: 0.88, depth: 0.26, ejecta: 0.10 }, // Rheasilvia
+            { d: d(-62,  60), radius: 0.55, depth: 0.16, ejecta: 0.06 }, // Veneneia
+            { d: d( 26, 145), radius: 0.14, depth: 0.08, ejecta: 0.32 }, // Olbers (bright)
+            { d: d(  8, 240), radius: 0.11, depth: 0.07, ejecta: 0.22 },
+            { d: d(-14,  46), radius: 0.09, depth: 0.07, ejecta: 0.18 },
+            { d: d( 49, 200), radius: 0.08, depth: 0.06, ejecta: 0.14 },
+            { d: d( 30,  30), radius: 0.07, depth: 0.05, ejecta: 0.12 },
+            { d: d(-40, 286), radius: 0.06, depth: 0.05, ejecta: 0.10 },
           ],
         };
+
       case 'pallas':
         return {
           spectralType: 'B',
-          baseRgb: [100, 102, 110],
+          baseRgb: [0.18, 0.18, 0.20],
+          scale: [1.0, 0.88, 0.88],
           craters: [
-            { u: 0.40, v: 0.35, r: 0.18, depth: 0.50, ejecta: 0.18 },
-            { u: 0.60, v: 0.60, r: 0.15, depth: 0.45, ejecta: 0.15 },
-            { u: 0.25, v: 0.65, r: 0.12, depth: 0.40, ejecta: 0.12 },
-            { u: 0.70, v: 0.30, r: 0.10, depth: 0.38, ejecta: 0.14 },
-            { u: 0.50, v: 0.50, r: 0.08, depth: 0.35, ejecta: 0.10 },
-            { u: 0.15, v: 0.40, r: 0.07, depth: 0.38, ejecta: 0.10 },
-            { u: 0.85, v: 0.70, r: 0.06, depth: 0.32, ejecta: 0.08 },
+            { d: d( 32,  46), radius: 0.45, depth: 0.12, ejecta: 0.04 },
+            { d: d(-34, 120), radius: 0.38, depth: 0.10, ejecta: 0.04 },
+            { d: d( 11, 218), radius: 0.30, depth: 0.09, ejecta: 0.03 },
+            { d: d(-17, 315), radius: 0.25, depth: 0.08, ejecta: 0.03 },
+            { d: d( 63,  86), radius: 0.20, depth: 0.07, ejecta: 0.02 },
+            { d: d(-46, 229), radius: 0.18, depth: 0.07, ejecta: 0.02 },
+            { d: d( 23,  17), radius: 0.14, depth: 0.06, ejecta: 0.02 },
+            { d: d( 78, 155), radius: 0.12, depth: 0.05, ejecta: 0.02 },
           ],
         };
+
       case 'hygiea':
         return {
           spectralType: 'C',
-          baseRgb: [75, 74, 70],
+          baseRgb: [0.12, 0.12, 0.11],
+          scale: [1.0, 1.0, 1.0],
           craters: [
-            // Very subtle — primitive undifferentiated body
-            { u: 0.50, v: 0.50, r: 0.08, depth: 0.22, ejecta: 0.08 },
-            { u: 0.30, v: 0.30, r: 0.05, depth: 0.18, ejecta: 0.06 },
-            { u: 0.70, v: 0.65, r: 0.04, depth: 0.15, ejecta: 0.05 },
+            { d: d(  6,  69), radius: 0.22, depth: 0.05, ejecta: 0.02 },
+            { d: d(-29, 200), radius: 0.16, depth: 0.04, ejecta: 0.02 },
+            { d: d( 46, 286), radius: 0.12, depth: 0.03, ejecta: 0.01 },
+            { d: d(-60,  42), radius: 0.10, depth: 0.03, ejecta: 0.01 },
           ],
         };
+
       case 'juno':
         return {
           spectralType: 'S',
-          baseRgb: [176, 160, 144],
+          baseRgb: [0.44, 0.38, 0.30],
+          scale: [1.2, 1.0, 1.0],
           craters: [
-            { u: 0.50, v: 0.45, r: 0.12, depth: 0.40, ejecta: 0.30 },
-            { u: 0.25, v: 0.55, r: 0.09, depth: 0.35, ejecta: 0.26 },
-            { u: 0.75, v: 0.38, r: 0.08, depth: 0.33, ejecta: 0.24 },
-            { u: 0.60, v: 0.72, r: 0.06, depth: 0.30, ejecta: 0.20 },
+            { d: d( 11,  86), radius: 0.30, depth: 0.16, ejecta: 0.22 },
+            { d: d(-23, 218), radius: 0.24, depth: 0.13, ejecta: 0.18 },
+            { d: d( 40, 315), radius: 0.20, depth: 0.12, ejecta: 0.16 },
+            { d: d( -6,  29), radius: 0.16, depth: 0.10, ejecta: 0.14 },
+            { d: d( 60, 172), radius: 0.12, depth: 0.08, ejecta: 0.10 },
           ],
         };
+
       case 'eros':
         return {
           spectralType: 'S',
-          baseRgb: [200, 168, 120],
+          baseRgb: [0.56, 0.44, 0.32],
+          scale: [1.55, 0.82, 0.82],        // elongated peanut (mesh-scale, not geometry)
           craters: [
-            // Psyche — large crater with dark floor
-            { u: 0.55, v: 0.40, r: 0.14, depth: 0.52, ejecta: 0.25 },
-            // Himeros saddle — treated as shallow depression
-            { u: 0.50, v: 0.52, r: 0.18, depth: 0.20, ejecta: 0.05 },
-            // Smaller craters
-            { u: 0.30, v: 0.35, r: 0.07, depth: 0.38, ejecta: 0.22 },
-            { u: 0.75, v: 0.60, r: 0.06, depth: 0.35, ejecta: 0.20 },
-            { u: 0.20, v: 0.65, r: 0.05, depth: 0.30, ejecta: 0.18 },
+            { d: d( 17, 115), radius: 0.30, depth: 0.26, ejecta: 0.20 }, // Psyche
+            { d: d(  0,   0), radius: 0.50, depth: 0.08, ejecta: 0.00 }, // Himeros saddle
+            { d: d(-29, 258), radius: 0.16, depth: 0.14, ejecta: 0.12 }, // Shoemaker
+            { d: d( 43,  69), radius: 0.13, depth: 0.11, ejecta: 0.09 },
+            { d: d(-11, 178), radius: 0.10, depth: 0.09, ejecta: 0.08 },
+            { d: d( 63, 315), radius: 0.08, depth: 0.07, ejecta: 0.07 },
           ],
         };
+
       default:
-        return {
-          spectralType: 'C',
-          baseRgb: [100, 98, 95],
-          craters: [],
-        };
+        return { spectralType: 'C', baseRgb: [0.20, 0.20, 0.18], scale: [1, 1, 1], craters: [] };
     }
   }
 
-  /** Generate a 512×512 albedo CanvasTexture */
-  _generateAlbedoTexture(key, config) {
-    const W = 512, H = 512;
-    const canvas = document.createElement('canvas');
-    canvas.width = W; canvas.height = H;
-    const ctx = canvas.getContext('2d');
+  // ─── Geometry (SphereGeometry + shape deformation) ──────────────────────────
+
+  /**
+   * Unified asteroid geometry using SMOOTH COHERENT noise via _valueNoise.
+   *
+   * Why: per-vertex independent random displacement (the previous approach) makes
+   * adjacent vertices have wildly different radii → sharp triangular spikes visible
+   * as "2D triangles loosely attached". Smooth noise keyed on angular position
+   * creates large, gradual rocky undulations instead.
+   *
+   * Each asteroid has unique phase offsets so they all look distinct.
+   * Shape-specific features (Vesta basin, Eros waist) are layered on top.
+   */
+  _createAsteroidGeometry(key) {
+    const segs = key === 'hygiea' ? 48 : 64;
+    const geo  = new THREE.SphereGeometry(1, segs, Math.floor(segs / 2));
+    const pos  = geo.attributes.position;
+
+    // Per-asteroid phase offsets → unique appearance per body
+    const phases = {
+      vesta:  [1.50, 2.30, 3.70, 0.90],
+      pallas: [4.70, 8.10, 2.40, 6.30],
+      hygiea: [2.20, 5.90, 1.10, 7.80],
+      juno:   [6.30, 3.40, 9.20, 1.50],
+      eros:   [9.10, 1.80, 5.50, 3.20],
+    };
+    const [ox, oy, ox2, oy2] = phases[key] || [0, 0, 0, 0];
+
+    // Reduced amplitudes: texture provides visual detail, geometry just gives a potato shape
+    const amp = { vesta: 0.06, pallas: 0.08, hygiea: 0.03, juno: 0.07, eros: 0.06 };
+    const noiseAmp = amp[key] ?? 0.06;
+
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      const len = Math.sqrt(x*x + y*y + z*z) || 1;
+      const nx  = x / len, ny = y / len, nz = z / len;
+
+      // Use 3D normalised position as noise input — no phi/atan2 seam spikes
+      const f1 = this._valueNoise(nx * 1.3 + nz * 0.6 + ox,  ny * 1.6 + nx * 0.4 + oy);
+      const f2 = this._valueNoise(nx * 2.9 + ny * 0.7 + ox2, nz * 3.5 + ny * 0.5 + oy2) * 0.50;
+      const f3 = this._valueNoise(nz * 5.8 + nx * 1.2 + ox,  ny * 6.8 + nz * 0.3 + oy)  * 0.25;
+      const n  = (f1 + f2 + f3) / 1.75;  // [0..1]
+
+      let r = len * (1.0 - noiseAmp * 0.5 + n * noiseAmp);
+
+      // ── Shape-specific major features (softened to avoid spikes) ──
+      if (key === 'vesta') {
+        // Rheasilvia impact basin: gentle south-polar depression
+        const sa = Math.acos(Math.max(-1, Math.min(1, -ny)));
+        if (sa < 0.88) {
+          r -= 0.08 * (1 - sa / 0.88);
+          if (sa < 0.12) r += 0.04 * (1 - sa / 0.12); // central rebound
+        }
+      }
+      if (key === 'eros') {
+        // Himeros saddle: mild equatorial waist pinch
+        r *= (1 - 0.12 * Math.exp(-nx * nx / 0.15));
+      }
+
+      pos.setXYZ(i, x * r / len, y * r / len, z * r / len);
+    }
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  // ─── Procedural canvas texture generation ────────────────────────────────────
+
+  /**
+   * Generates albedo (512×256) + normal map (256×128) canvas textures per asteroid.
+   * Uses pixel-by-pixel equirectangular rendering: each pixel maps to a sphere direction,
+   * craters are rendered precisely in angular space with dark floors and bright rims.
+   * Three.js SphereGeometry UV convention:
+   *   px=0,py=0 (canvas top-left) → north pole (y=+1) with flipY=true ✓
+   */
+  _generateAsteroidTextures(key) {
+    const config = this._getAsteroidConfig(key);
+    const W = 1024, H = 512; // doubled for more surface detail
+
+    // Precompute each crater's UV centre + bounding radius for fast rejection
+    const cUV = config.craters.map(cr => {
+      const theta = Math.acos(Math.max(-1, Math.min(1, cr.d[1])));
+      const phi   = Math.atan2(cr.d[2], cr.d[0]);
+      const cu    = ((phi < 0 ? phi + Math.PI * 2 : phi)) / (Math.PI * 2);
+      const cv    = theta / Math.PI;
+      return { cu, cv, uvR: cr.radius / Math.PI * 1.5 + 0.02 };
+    });
 
     const [br, bg, bb] = config.baseRgb;
+    const albPx  = new Uint8ClampedArray(W * H * 4);
+    const hBuf   = new Float32Array(W * H);       // height field for normal map
 
-    // Base fill with subtle noise
-    const imgData = ctx.createImageData(W, H);
-    const d = imgData.data;
-    let seed = key.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-    const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
+    for (let py = 0; py < H; py++) {
+      // theta=0 at py=0 (north, canvas top), theta=π at py=H (south, canvas bottom)
+      const theta = (py + 0.5) / H * Math.PI;
+      const sinT  = Math.sin(theta);
+      const cosT  = Math.cos(theta);
 
-    for (let i = 0; i < W * H; i++) {
-      const noise = 0.88 + rand() * 0.24;
-      d[i * 4 + 0] = Math.min(255, br * noise);
-      d[i * 4 + 1] = Math.min(255, bg * noise);
-      d[i * 4 + 2] = Math.min(255, bb * noise);
-      d[i * 4 + 3] = 255;
-    }
-    ctx.putImageData(imgData, 0, 0);
+      for (let px = 0; px < W; px++) {
+        const phi = (px + 0.5) / W * Math.PI * 2;
+        // Direction vector for this pixel (standard spherical coords)
+        const dx = sinT * Math.cos(phi);
+        const dy = cosT;
+        const dz = sinT * Math.sin(phi);
 
-    // Paint craters
-    for (const cr of config.craters) {
-      const cx = cr.u * W;
-      const cy = cr.v * H;
-      const r = cr.r * W;
+        // 4-octave value noise for realistic mottled surface albedo
+        const n1 = this._valueNoise(px * 0.014, py * 0.014);
+        const n2 = this._valueNoise(px * 0.040, py * 0.040) * 0.50;
+        const n3 = this._valueNoise(px * 0.100, py * 0.100) * 0.25;
+        const n4 = this._valueNoise(px * 0.260, py * 0.260) * 0.12;
+        const nv = (n1 + n2 + n3 + n4) / 1.87;  // [0..1]
+        const ns = 0.62 + nv * 0.76;             // [0.62..1.38] — wider albedo range
 
-      // Dark floor
-      const floorGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 0.7);
-      const floorA = Math.min(0.85, cr.depth * 0.9);
-      floorGrad.addColorStop(0, `rgba(0,0,0,${floorA})`);
-      floorGrad.addColorStop(0.6, `rgba(0,0,0,${floorA * 0.6})`);
-      floorGrad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = floorGrad;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r * 0.85, 0, Math.PI * 2);
-      ctx.fill();
+        // Per-asteroid large-scale region variation (signature markings)
+        const lf1 = this._valueNoise(px * 0.004 + 0.5, py * 0.004 + 0.5);
+        const lf2 = this._valueNoise(px * 0.008 + 1.5, py * 0.008 + 1.5) * 0.5;
+        const lf  = (lf1 + lf2) / 1.5;
 
-      // Bright ejecta rim
-      const rimGrad = ctx.createRadialGradient(cx, cy, r * 0.85, cx, cy, r * 1.3);
-      const rimA = cr.ejecta * 0.7;
-      rimGrad.addColorStop(0, `rgba(255,255,240,${rimA})`);
-      rimGrad.addColorStop(0.5, `rgba(255,255,240,${rimA * 0.4})`);
-      rimGrad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = rimGrad;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r * 1.3, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Ray system for large craters
-      if (cr.r > 0.12) {
-        ctx.save();
-        ctx.translate(cx, cy);
-        const rayCount = 6 + Math.floor(rand() * 4);
-        for (let i = 0; i < rayCount; i++) {
-          const rayAngle = (i / rayCount) * Math.PI * 2 + rand() * 0.3;
-          const rayLen = r * (1.8 + rand() * 2.0);
-          const rayW = r * (0.06 + rand() * 0.08);
-          const rayGrad = ctx.createLinearGradient(0, 0, Math.cos(rayAngle) * rayLen, Math.sin(rayAngle) * rayLen);
-          rayGrad.addColorStop(0, `rgba(255,255,240,${rimA * 0.5})`);
-          rayGrad.addColorStop(1, 'rgba(0,0,0,0)');
-          ctx.fillStyle = rayGrad;
-          ctx.beginPath();
-          ctx.moveTo(Math.cos(rayAngle - 0.05) * r, Math.sin(rayAngle - 0.05) * r);
-          ctx.lineTo(Math.cos(rayAngle + 0.05) * r, Math.sin(rayAngle + 0.05) * r);
-          ctx.lineTo(Math.cos(rayAngle + 0.01) * rayLen, Math.sin(rayAngle + 0.01) * rayLen);
-          ctx.closePath();
-          ctx.fill();
+        let regionFactor = 1.0;
+        if (key === 'vesta') {
+          // Darker south, brighter north — Rheasilvia basin floor is dark
+          regionFactor = 0.82 + dy * 0.38 + lf * 0.12;
+        } else if (key === 'pallas') {
+          // Strong patchwork (heavily space-weathered, primitive surface)
+          regionFactor = 0.68 + lf * 0.64;
+        } else if (key === 'eros') {
+          // Slight longitudinal bands (NEAR Shoemaker imagery)
+          regionFactor = 0.88 + lf * 0.24;
+        } else if (key === 'juno') {
+          // Bright equatorial band
+          const lat = Math.abs(dy);
+          regionFactor = 0.85 + (1 - lat) * 0.30 + lf * 0.15;
+        } else {
+          // Generic: subtle patchwork
+          regionFactor = 0.90 + lf * 0.20;
         }
-        ctx.restore();
-      }
-    }
 
-    // Juno: equatorial bright band
-    if (key === 'juno') {
-      const bandGrad = ctx.createLinearGradient(0, H * 0.35, 0, H * 0.65);
-      bandGrad.addColorStop(0, 'rgba(255,255,200,0)');
-      bandGrad.addColorStop(0.5, 'rgba(255,255,200,0.12)');
-      bandGrad.addColorStop(1, 'rgba(255,255,200,0)');
-      ctx.fillStyle = bandGrad;
-      ctx.fillRect(0, 0, W, H);
-    }
+        let r = br * ns * regionFactor;
+        let g = bg * ns * regionFactor;
+        let b = bb * ns * regionFactor;
+        let h = nv * 0.010;
 
-    // Pallas: dark hemisphere (left half is darker)
-    if (key === 'pallas') {
-      const hemiGrad = ctx.createLinearGradient(0, 0, W, 0);
-      hemiGrad.addColorStop(0, 'rgba(0,0,0,0.22)');
-      hemiGrad.addColorStop(0.45, 'rgba(0,0,0,0.08)');
-      hemiGrad.addColorStop(0.55, 'rgba(255,255,255,0.04)');
-      hemiGrad.addColorStop(1, 'rgba(255,255,255,0.10)');
-      ctx.fillStyle = hemiGrad;
-      ctx.fillRect(0, 0, W, H);
-    }
+        const u = (px + 0.5) / W;
+        const v = (py + 0.5) / H;
 
-    return new THREE.CanvasTexture(canvas);
-  }
+        let colF = 0, htF = 0;
 
-  /** Generate a 256×256 normal map CanvasTexture using Sobel kernel on height field */
-  _generateNormalMap(key, config) {
-    const W = 256, H = 256;
+        for (let ci = 0; ci < config.craters.length; ci++) {
+          const cr  = config.craters[ci];
+          const cuv = cUV[ci];
 
-    // Build height field
-    const hf = new Float32Array(W * H);
+          // Bounding-box rejection (longitude wraps at u=0/1)
+          const du = Math.min(Math.abs(u - cuv.cu), 1 - Math.abs(u - cuv.cu));
+          if (du > cuv.uvR && Math.abs(v - cuv.cv) > cuv.uvR) continue;
 
-    // Background roughness noise
-    let seed = key.split('').reduce((a, c) => a * 31 + c.charCodeAt(0), 1);
-    const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
-    for (let i = 0; i < W * H; i++) {
-      hf[i] = (rand() - 0.5) * 0.1;
-    }
+          // Precise angular distance
+          const dot   = Math.max(-1, Math.min(1, dx*cr.d[0] + dy*cr.d[1] + dz*cr.d[2]));
+          const angle = Math.acos(dot);
+          const t     = angle / cr.radius;
+          if (t >= 1.5) continue;
 
-    // Add crater height profiles
-    for (const cr of config.craters) {
-      const cx = cr.u * W;
-      const cy = cr.v * H;
-      const r = cr.r * W;
-
-      for (let py = 0; py < H; py++) {
-        for (let px = 0; px < W; px++) {
-          const dx = px - cx;
-          const dy = py - cy;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-
-          if (dist < r * 1.4) {
-            const t = dist / r;
-            let h = 0;
-            if (t < 0.7) {
-              // Floor: depressed
-              h = -0.6 * (1 - t / 0.7);
-            } else if (t < 1.0) {
-              // Rim: raised
-              const rimT = (t - 0.7) / 0.3;
-              h = 0.4 * Math.sin(rimT * Math.PI);
-            } else {
-              // Ejecta: gentle falloff
-              h = 0.1 * Math.exp(-(t - 1.0) * 5);
-            }
-            hf[py * W + px] += h * cr.depth;
+          let cf = 0, hf = 0;
+          if (t < 0.58) {
+            // Floor: deeply dark, flat-bottomed
+            const ft = t / 0.58;
+            cf = -cr.depth * 1.5 * (1 - ft * ft * 0.3);
+            hf = -cr.depth * 0.55 * (1 - t / 0.58);
+          } else if (t < 0.78) {
+            // Inner rim wall: sharp bright peak
+            const rt = (t - 0.58) / 0.20;
+            cf = cr.ejecta * 1.3 * Math.sin(rt * Math.PI);
+            hf = cr.ejecta * 0.45 * Math.sin(rt * Math.PI);
+          } else if (t < 1.10) {
+            // Ejecta blanket: fading brightness
+            const et = (t - 0.78) / 0.32;
+            cf = cr.ejecta * 0.65 * (1 - et);
+          } else if (t < 1.45) {
+            // Extended ejecta halo for larger craters
+            const ht = (t - 1.10) / 0.35;
+            cf = cr.ejecta * 0.18 * Math.exp(-ht * 3);
           }
+
+          if (Math.abs(cf) > Math.abs(colF)) colF = cf;
+          htF += hf;
         }
+
+        r = Math.max(0, Math.min(1, r + colF));
+        g = Math.max(0, Math.min(1, g + colF));
+        b = Math.max(0, Math.min(1, b + colF));
+        h += htF;
+
+        const idx = py * W + px;
+        albPx[idx*4]   = (r * 255) | 0;
+        albPx[idx*4+1] = (g * 255) | 0;
+        albPx[idx*4+2] = (b * 255) | 0;
+        albPx[idx*4+3] = 255;
+        hBuf[idx]       = h;
       }
     }
 
-    // Sobel 3×3 → surface normals → RGB
-    const canvas = document.createElement('canvas');
-    canvas.width = W; canvas.height = H;
-    const ctx = canvas.getContext('2d');
-    const imgData = ctx.createImageData(W, H);
-    const d = imgData.data;
+    // Build albedo CanvasTexture
+    const albC = document.createElement('canvas');
+    albC.width = W; albC.height = H;
+    albC.getContext('2d').putImageData(new ImageData(albPx, W, H), 0, 0);
+    const albedoTex = new THREE.CanvasTexture(albC);
 
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        const idx = y * W + x;
-        // Sample 3×3 neighbours (clamp to edges)
-        const tl = hf[Math.max(0, y - 1) * W + Math.max(0, x - 1)];
-        const tc = hf[Math.max(0, y - 1) * W + x];
-        const tr = hf[Math.max(0, y - 1) * W + Math.min(W - 1, x + 1)];
-        const ml = hf[y * W + Math.max(0, x - 1)];
-        const mr = hf[y * W + Math.min(W - 1, x + 1)];
-        const bl = hf[Math.min(H - 1, y + 1) * W + Math.max(0, x - 1)];
-        const bc = hf[Math.min(H - 1, y + 1) * W + x];
-        const br2 = hf[Math.min(H - 1, y + 1) * W + Math.min(W - 1, x + 1)];
+    // Build normal map at half resolution via Sobel on height field
+    const NW = W >> 1, NH = H >> 1;
+    const normPx = new Uint8ClampedArray(NW * NH * 4);
+    const bumpScale = 15.0;
 
-        const dX = (tr + 2 * mr + br2) - (tl + 2 * ml + bl);
-        const dY = (bl + 2 * bc + br2) - (tl + 2 * tc + tr);
-
-        // Normal = normalize(-dX, -dY, 1/strength)
-        const strength = 2.5;
-        const nx = -dX * strength;
-        const ny = -dY * strength;
-        const nz = 1.0;
-        const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-
-        d[idx * 4 + 0] = Math.round((nx / len) * 0.5 * 255 + 127.5);
-        d[idx * 4 + 1] = Math.round((ny / len) * 0.5 * 255 + 127.5);
-        d[idx * 4 + 2] = Math.round((nz / len) * 0.5 * 255 + 127.5);
-        d[idx * 4 + 3] = 255;
+    for (let py = 0; py < NH; py++) {
+      for (let px = 0; px < NW; px++) {
+        const hx = px * 2, hy = py * 2;
+        const hL = hBuf[hy * W + Math.max(0, hx-1)];
+        const hR = hBuf[hy * W + Math.min(W-1, hx+1)];
+        const hU = hBuf[Math.max(0, hy-1) * W + hx];
+        const hD = hBuf[Math.min(H-1, hy+1) * W + hx];
+        const ndx = (hR - hL) * bumpScale;
+        const ndy = (hD - hU) * bumpScale;
+        const len = Math.sqrt(ndx*ndx + ndy*ndy + 1);
+        const idx = py * NW + px;
+        normPx[idx*4]   = ((ndx / len) * 0.5 + 0.5) * 255 | 0;
+        normPx[idx*4+1] = ((ndy / len) * 0.5 + 0.5) * 255 | 0;
+        normPx[idx*4+2] = ((1.0  / len) * 0.5 + 0.5) * 255 | 0;
+        normPx[idx*4+3] = 255;
       }
     }
 
-    ctx.putImageData(imgData, 0, 0);
-    return new THREE.CanvasTexture(canvas);
+    const normC = document.createElement('canvas');
+    normC.width = NW; normC.height = NH;
+    normC.getContext('2d').putImageData(new ImageData(normPx, NW, NH), 0, 0);
+    const normalTex = new THREE.CanvasTexture(normC);
+
+    return { albedoTex, normalTex };
   }
 
-  /** Generate a 128×128 roughness map CanvasTexture */
-  _generateRoughnessMap(key, config) {
-    const W = 128, H = 128;
-
-    // Base roughness per spectral type
-    const baseRoughness = { C: 0.92, B: 0.90, S: 0.82, V: 0.85, M: 0.62 }[config.spectralType] || 0.88;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = W; canvas.height = H;
-    const ctx = canvas.getContext('2d');
-
-    const imgData = ctx.createImageData(W, H);
-    const d = imgData.data;
-
-    let seed = key.length * 7 + 13;
-    const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
-
-    for (let i = 0; i < W * H; i++) {
-      const noise = (rand() - 0.5) * 0.1;
-      let r = baseRoughness + noise;
-
-      // Craters slightly smoother floors
-      const px = (i % W) / W;
-      const py = Math.floor(i / W) / H;
-      for (const cr of config.craters) {
-        const dx = px - cr.u;
-        const dy = py - cr.v;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < cr.r * 0.6) {
-          r -= 0.08 * (1 - dist / (cr.r * 0.6));
-        }
-      }
-
-      r = Math.max(0.1, Math.min(1.0, r));
-      const v = Math.round(r * 255);
-      d[i * 4 + 0] = v;
-      d[i * 4 + 1] = v;
-      d[i * 4 + 2] = v;
-      d[i * 4 + 3] = 255;
-    }
-
-    ctx.putImageData(imgData, 0, 0);
-    return new THREE.CanvasTexture(canvas);
+  /** Smooth 2D value noise via bilinear interpolation of hashed lattice. */
+  _valueNoise(x, y) {
+    const xi = Math.floor(x), yi = Math.floor(y);
+    const xf = x - xi, yf = y - yi;
+    const sx = xf * xf * (3 - 2 * xf);
+    const sy = yf * yf * (3 - 2 * yf);
+    const h00 = this._hash2D(xi,   yi  );
+    const h10 = this._hash2D(xi+1, yi  );
+    const h01 = this._hash2D(xi,   yi+1);
+    const h11 = this._hash2D(xi+1, yi+1);
+    return h00 + sx*(h10-h00) + sy*(h01-h00) + sx*sy*(h00-h10-h01+h11);
   }
 
-  /** Generate full PBR material for a notable asteroid */
-  _generateAsteroidMaterial(key, data) {
-    const config = this._getCraterConfig(key);
-    const albedoTex = this._generateAlbedoTexture(key, config);
-    const normalTex = this._generateNormalMap(key, config);
-    const roughnessTex = this._generateRoughnessMap(key, config);
+  _hash2D(x, y) {
+    let h = ((x * 374761393) ^ (y * 668265263)) | 0;
+    h = ((h ^ (h >>> 13)) * 1274126177) | 0;
+    return ((h ^ (h >>> 16)) & 0x7fffffff) / 0x7fffffff;
+  }
 
-    const metalnessMap = { C: 0.05, B: 0.05, S: 0.10, V: 0.08, M: 0.35 };
-    const roughnessMap = { C: 0.92, B: 0.90, S: 0.82, V: 0.85, M: 0.62 };
+  /**
+   * Generate PBR material using the real photographic moon texture.
+   *
+   * The Moon's surface is morphologically identical to S/C-type asteroid terrain
+   * (both are heavily cratered airless rocky bodies processed by the same impact
+   * physics). Using moon_2k.jpg gives genuine photographic surface detail instead
+   * of procedural noise.
+   *
+   * Spectral differentiation is achieved via material.color (a linear multiplier
+   * on the texture), which controls both albedo level and colour tint:
+   *   V-type (Vesta):  medium warm gray  — HED achondrite, ~42% albedo
+   *   S-type (Eros/Juno): warm tan       — silicate/metal, ~20% albedo
+   *   B-type (Pallas): dark gray         — carbonaceous, ~15% albedo
+   *   C-type (Hygiea): very dark         — primitive C-type, ~5% albedo
+   *
+   * Each asteroid also gets a unique UV offset so they show different parts of
+   * the source texture and look distinct from one another.
+   */
+  /**
+   * Build a PBR material whose albedo is derived from the real moon_2k.jpg photo.
+   *
+   * WHY CANVAS CROP INSTEAD OF UV OFFSET:
+   *   THREE.TextureLoader caches images internally. All five `loader.load(url)` calls
+   *   return Texture objects that share the same underlying HTMLImageElement.
+   *   Setting `.offset` on one mutates the SAME object → all asteroids end up with
+   *   the last offset written. The fix: bake a unique crop + spectral tint into a
+   *   dedicated CanvasTexture per asteroid — five genuinely different textures.
+   *
+   * CROP REGIONS (normalised source coords [x, y, w, h]):
+   *   Each asteroid shows a different geographic region of the Moon so they look
+   *   visually distinct even though they share the same source image.
+   *
+   * SPECTRAL TINT (canvas 'multiply' blend):
+   *   Multiplying the lunar grey-scale with the tint colour shifts albedo and hue
+   *   to match each asteroid's spectral class:
+   *     V-type (Vesta)      bright warm gray  ~42 % albedo
+   *     S-type (Eros/Juno)  warm tan-orange   ~20 % albedo
+   *     B-type (Pallas)     medium dark gray  ~15 % albedo
+   *     C-type (Hygiea)     very dark         ~5 % albedo
+   */
+  _generateAsteroidMaterial(key) {
+    const config = this._getAsteroidConfig(key);
+    const st     = config.spectralType;
 
-    return new THREE.MeshStandardMaterial({
-      map: albedoTex,
-      normalMap: normalTex,
-      normalScale: new THREE.Vector2(1.5, 1.5),
-      roughnessMap: roughnessTex,
-      roughness: roughnessMap[config.spectralType] || 0.88,
-      metalness: metalnessMap[config.spectralType] || 0.08,
+    const roughness = { C: 0.97, B: 0.96, S: 0.88, V: 0.90, M: 0.65 };
+    const metalness = { C: 0.02, B: 0.02, S: 0.06, V: 0.04, M: 0.40 };
+
+    // Material starts with a flat placeholder colour; .map is set once the image loads
+    const mat = new THREE.MeshStandardMaterial({
+      color:     0x666660,
+      roughness: roughness[st] ?? 0.92,
+      metalness: metalness[st] ?? 0.04,
     });
+
+    new THREE.TextureLoader().load('/textures/moon_2k.jpg', (moonTex) => {
+      const W = 512, H = 256;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      const img = moonTex.image;
+
+      // Unique source crop per asteroid [srcX%, srcY%, srcW%, srcH%]
+      // → each body shows a clearly different region of the lunar surface
+      const regions = {
+        vesta:  [0.00, 0.00, 1.00, 1.00], // full map — polar craters + mare
+        pallas: [0.28, 0.10, 0.72, 0.90], // highland terrain, dense cratering
+        hygiea: [0.55, 0.38, 0.45, 0.62], // mare-rich region (darkest, fewest craters)
+        juno:   [0.06, 0.52, 0.94, 0.48], // equatorial band, elongated perspective
+        eros:   [0.60, 0.02, 0.40, 0.98], // far-side terrain, fresh craters
+      };
+      const [rx, ry, rw, rh] = regions[key] || [0, 0, 1, 1];
+      ctx.drawImage(
+        img,
+        rx * img.width, ry * img.height,
+        rw * img.width, rh * img.height,
+        0, 0, W, H,
+      );
+
+      // Spectral tint — multiply blend shifts albedo level + colour cast
+      const tints = {
+        V: '#C8C0B2', // Vesta: warm medium-gray (HED achondrite)
+        S: '#D4AC7C', // Juno / Eros: warm tan-orange (silicate S-type)
+        B: '#706A62', // Pallas: medium-dark cool gray (B carbonaceous)
+        C: '#343230', // Hygiea: near-black gray-brown (primitive C-type)
+        M: '#8898AC', // M-type: cool steel-gray (metallic)
+      };
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = tints[st] || '#808080';
+      ctx.fillRect(0, 0, W, H);
+
+      // Assign the baked texture — material auto-updates on next render frame
+      mat.map = new THREE.CanvasTexture(canvas);
+      mat.color.setHex(0xffffff); // tint is in the texture; reset material tint to white
+      mat.needsUpdate = true;
+    });
+
+    return mat;
   }
 
   /** Get a notable asteroid entry */
@@ -864,11 +767,9 @@ export class AsteroidBelt {
       if (entry) {
         entry.mesh.geometry.dispose();
         if (entry.mesh.material) {
-          const mat = entry.mesh.material;
-          if (mat.map) mat.map.dispose();
-          if (mat.normalMap) mat.normalMap.dispose();
-          if (mat.roughnessMap) mat.roughnessMap.dispose();
-          mat.dispose();
+          entry.mesh.material.map?.dispose();
+          entry.mesh.material.normalMap?.dispose();
+          entry.mesh.material.dispose();
         }
         this.scene.remove(entry.orbitGroup);
       }

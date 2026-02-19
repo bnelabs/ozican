@@ -23,7 +23,8 @@
  * @property {string} target - planet/body key
  */
 import { SolarSystemScene } from './scene/SolarSystemScene.js';
-import { renderPlanetInfo, renderCompactPlanetInfo, renderMoonInfo } from './ui/InfoPanel.js';
+import { FlybyMode } from './scene/FlybyMode.js';
+import { renderPlanetInfo, renderCompactPlanetInfo, renderMoonInfo, renderISSInfo } from './ui/InfoPanel.js';
 import { renderCompareTable, renderCompareCards } from './ui/ComparePanel.js';
 import { renderMissionList, renderMissionDetail, renderMissionHUD, renderWaypointCard } from './ui/MissionPanel.js';
 import { MissionRenderer } from './scene/MissionRenderer.js';
@@ -180,6 +181,7 @@ let labelsVisible = true;
 let keyboardHelpVisible = false;
 let waypointCardTimeout = null;
 let crossSectionViewer = null;
+let flybyMode = null;
 let solarStorm = null;
 
 // Quiz state
@@ -433,9 +435,22 @@ function startApp() {
   // Initialize CrossSectionViewer singleton
   crossSectionViewer = new CrossSectionViewer(announce);
 
+  // Initialize FlybyMode
+  flybyMode = new FlybyMode(
+    scene.scene, scene.camera, scene.controls, audioManager, announce
+  );
+
   // Listen for scene errors
   document.addEventListener('scene-error', (e) => {
     showError(e.detail || 'An error occurred while loading the 3D scene.');
+  });
+
+  // Flyby mode events
+  document.addEventListener('flyby-started', () => {
+    closeInfoPanel();
+  });
+  document.addEventListener('flyby-ended', () => {
+    audioManager.setContext(currentPlanetKey ? 'planet' : 'overview');
   });
 
   // Help/tutorial restart button
@@ -651,6 +666,10 @@ function wireSceneCallbacks() {
     openMoonInfoPanel(planetKey, moonIndex);
   };
 
+  scene.onISSClick = () => {
+    openISSPanel();
+  };
+
   scene.onHoverChange = (key) => {
     if (key) {
       tooltip.textContent = getLocalizedPlanet(key).name;
@@ -678,6 +697,11 @@ function wireSceneCallbacks() {
     // Update cinematic tour
     if (cinematicTour) {
       cinematicTour.update(delta || 0.016);
+    }
+
+    // Update flyby animation
+    if (flybyMode && flybyMode.isActive) {
+      flybyMode.update(delta || 0.016);
     }
 
     // Update solar storm simulation
@@ -712,6 +736,20 @@ function wireInfoPanelHandlers() {
     cutawayBtn.addEventListener('click', () => {
       const key = cutawayBtn.dataset.planet;
       if (crossSectionViewer) crossSectionViewer.open(key);
+    });
+  }
+
+  // Wire up flyby button in full panel
+  const flybyBtn = document.getElementById('flyby-btn');
+  if (flybyBtn && flybyMode) {
+    flybyBtn.addEventListener('click', () => {
+      const planetKey = flybyBtn.dataset.planet;
+      if (!planetKey || !scene) return;
+      const bodyPos = scene.getPlanetWorldPosition(planetKey);
+      const bodyData = scene.planets?.[planetKey] || scene.dwarfPlanets?.[planetKey];
+      const radius = bodyData?.data?.displayRadius || 5;
+      closeInfoPanel();
+      flybyMode.startFlyby(planetKey, bodyPos, radius);
     });
   }
 }
@@ -764,6 +802,38 @@ function openInfoPanel(key) {
   updateCanvasAriaLabel(bodyName);
 }
 
+function openISSPanel() {
+  disposeCutaway();
+  currentPlanetKey = null;
+  currentMoonIndex = null;
+
+  safeRender(infoContent, () => renderISSInfo());
+  infoPanel.classList.remove('hidden');
+  infoPanel.classList.add('expanded'); // show full content immediately
+  infoPanel.setAttribute('aria-hidden', 'false');
+  comparePanel.classList.add('hidden');
+  comparePanel.setAttribute('aria-hidden', 'true');
+  btnCompare.classList.remove('active');
+  btnCompare.setAttribute('aria-pressed', 'false');
+  if (quizPanel) {
+    quizPanel.classList.add('hidden');
+    quizPanel.setAttribute('aria-hidden', 'true');
+    btnQuiz.classList.remove('active');
+  }
+
+  // No planet thumb highlight — ISS isn't in the planet bar
+  planetThumbs.forEach(t => t.classList.remove('active'));
+
+  _activateTrap('info', infoPanel);
+  if (_swipeHandles.info) _swipeHandles.info.release();
+  _swipeHandles.info = makeSwipeDismissible(infoPanel, closeInfoPanel);
+
+  audioManager.setContext('planet');
+  history.replaceState(null, '', '#iss');
+  announce(`${t('a11y.nowViewing') || 'Now viewing'} ${t('iss.name')}`);
+  updateCanvasAriaLabel(t('iss.name'));
+}
+
 function wireCompactHandlers(key) {
   const showMoreBtn = document.getElementById('info-show-more');
   if (showMoreBtn) {
@@ -783,6 +853,20 @@ function wireCompactHandlers(key) {
     cutawayBtn.addEventListener('click', () => {
       const key = cutawayBtn.dataset.planet;
       if (crossSectionViewer) crossSectionViewer.open(key);
+    });
+  }
+
+  // Wire flyby button in compact view
+  const flybyBtn = document.getElementById('flyby-btn');
+  if (flybyBtn && flybyMode) {
+    flybyBtn.addEventListener('click', () => {
+      const planetKey = flybyBtn.dataset.planet;
+      if (!planetKey || !scene) return;
+      const bodyPos = scene.getPlanetWorldPosition(planetKey);
+      const bodyData = scene.planets?.[planetKey] || scene.dwarfPlanets?.[planetKey];
+      const radius = bodyData?.data?.displayRadius || 5;
+      closeInfoPanel();
+      flybyMode.startFlyby(planetKey, bodyPos, radius);
     });
   }
 }
@@ -1066,6 +1150,13 @@ btnOverview.addEventListener('click', () => {
   btnOverview.classList.add('active');
   audioManager.setContext('overview');
 });
+
+const btnRecenter = document.getElementById('btn-recenter');
+if (btnRecenter) {
+  btnRecenter.addEventListener('click', () => {
+    if (scene) scene.goToOverview();
+  });
+}
 
 btnCompare.addEventListener('click', () => {
   const isHidden = comparePanel.classList.contains('hidden');

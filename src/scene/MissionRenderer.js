@@ -110,37 +110,8 @@ export class MissionRenderer {
       this.waypointMarkers.push({ marker, glow, pos });
     }
 
-    // Spacecraft cone
-    const scGeo = new THREE.ConeGeometry(0.25, 0.8, 8);
-    scGeo.rotateX(Math.PI / 2);
-    const scMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(mission.color),
-      emissive: new THREE.Color(mission.color),
-      emissiveIntensity: 0.5,
-    });
-    this.spacecraft = new THREE.Mesh(scGeo, scMat);
-
-    // Engine glow sprite
-    const glowCanvas = document.createElement('canvas');
-    glowCanvas.width = 64;
-    glowCanvas.height = 64;
-    const gCtx = glowCanvas.getContext('2d');
-    const gradient = gCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
-    const c = new THREE.Color(mission.color);
-    gradient.addColorStop(0, `rgba(${Math.floor(c.r*255)},${Math.floor(c.g*255)},${Math.floor(c.b*255)},0.6)`);
-    gradient.addColorStop(1, `rgba(${Math.floor(c.r*255)},${Math.floor(c.g*255)},${Math.floor(c.b*255)},0)`);
-    gCtx.fillStyle = gradient;
-    gCtx.fillRect(0, 0, 64, 64);
-    const glowTexture = new THREE.CanvasTexture(glowCanvas);
-    const engineGlow = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: glowTexture,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    }));
-    engineGlow.scale.set(2, 2, 1);
-    this.spacecraft.add(engineGlow);
-
+    // Mission-specific spacecraft
+    this.spacecraft = this._createSpacecraftMesh(mission.id, new THREE.Color(mission.color));
     this.spacecraft.position.copy(points[0]);
     this.trajectoryGroup.add(this.spacecraft);
 
@@ -273,6 +244,157 @@ export class MissionRenderer {
 
   setSpeed(speed) {
     this.playbackSpeed = speed;
+  }
+
+  /** Create engine glow sprite in mission colour. */
+  _makeEngineGlow(color, scale = 2) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64; canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    const c = new THREE.Color(color);
+    const r = Math.floor(c.r * 255), g = Math.floor(c.g * 255), b = Math.floor(c.b * 255);
+    grad.addColorStop(0, `rgba(${r},${g},${b},0.8)`);
+    grad.addColorStop(0.4, `rgba(${r},${g},${b},0.4)`);
+    grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 64, 64);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: new THREE.CanvasTexture(canvas),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }));
+    sprite.scale.set(scale, scale, 1);
+    return sprite;
+  }
+
+  /**
+   * Build a mission-specific spacecraft THREE.Group.
+   * All geometry is procedural — no external assets required.
+   * @param {string} missionId
+   * @param {THREE.Color} color
+   * @returns {THREE.Group}
+   */
+  _createSpacecraftMesh(missionId, color) {
+    const group = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({
+      color,
+      metalness: 0.8,
+      roughness: 0.3,
+      emissive: color,
+      emissiveIntensity: 0.15,
+    });
+
+    if (missionId === 'voyager1' || missionId === 'voyager2') {
+      // Hexagonal bus body
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.08, 6), mat);
+      group.add(body);
+      // Parabolic HGA dish (hemisphere)
+      const dish = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat);
+      dish.position.set(0, 0.2, 0);
+      group.add(dish);
+      // 3 RTG boom arms at 120° apart
+      for (let i = 0; i < 3; i++) {
+        const boom = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.5, 4), mat);
+        boom.rotation.z = Math.PI / 2;
+        boom.position.set(Math.cos(i * Math.PI * 2 / 3) * 0.35, -0.1, Math.sin(i * Math.PI * 2 / 3) * 0.35);
+        group.add(boom);
+      }
+    } else if (missionId === 'pioneer10' || missionId === 'pioneer11') {
+      // Flat hexagonal bus
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.05, 6), mat);
+      group.add(body);
+      // Large HGA dish
+      const dish = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat);
+      dish.position.set(0, 0.18, 0);
+      group.add(dish);
+      // Single long RTG arm
+      const boom = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.7, 4), mat);
+      boom.rotation.z = Math.PI / 2;
+      boom.position.set(0.45, -0.05, 0);
+      group.add(boom);
+    } else if (missionId === 'newhorizons') {
+      // Piano-lid box body
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.08, 0.28), mat);
+      group.add(body);
+      // LORRI telescope
+      const scope = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.18, 8), mat);
+      scope.rotation.x = Math.PI / 2;
+      scope.position.set(0, 0.1, 0.12);
+      group.add(scope);
+      // 2 short RTG arms
+      for (let s = -1; s <= 1; s += 2) {
+        const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.3, 4), mat);
+        arm.rotation.z = Math.PI / 2;
+        arm.position.set(s * 0.22, -0.02, 0);
+        group.add(arm);
+      }
+    } else if (missionId === 'cassini') {
+      // Cylindrical bus
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.3, 8), mat);
+      group.add(body);
+      // HGA dish
+      const dish = new THREE.Mesh(new THREE.SphereGeometry(0.38, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat);
+      dish.position.set(0, 0.22, 0);
+      group.add(dish);
+      // Huygens probe disc attached at side
+      const huygens = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.03, 32), mat);
+      huygens.rotation.z = Math.PI / 2;
+      huygens.position.set(0.22, 0, 0);
+      group.add(huygens);
+      // Magnetometer boom
+      const boom = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.45, 4), mat);
+      boom.rotation.z = Math.PI / 2;
+      boom.position.set(-0.32, 0.05, 0);
+      group.add(boom);
+    } else if (missionId === 'juno') {
+      // Small hexagonal body
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.1, 6), mat);
+      group.add(body);
+      // 3 large solar panel wings at 120°
+      const panelMat = new THREE.MeshStandardMaterial({
+        color: 0x1a3a6a,
+        metalness: 0.4,
+        roughness: 0.6,
+        emissive: 0x0a1a3a,
+        emissiveIntensity: 0.1,
+        side: THREE.DoubleSide,
+      });
+      for (let i = 0; i < 3; i++) {
+        const panel = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.25), panelMat);
+        const angle = (i * Math.PI * 2) / 3;
+        panel.position.set(Math.cos(angle) * 0.55, 0, Math.sin(angle) * 0.55);
+        panel.rotation.y = angle + Math.PI / 2;
+        group.add(panel);
+      }
+    } else if (missionId === 'galileo') {
+      // Cylindrical body
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.28, 8), mat);
+      group.add(body);
+      // Large dish (partially deployed — tilted 30°)
+      const dish = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat);
+      dish.position.set(0, 0.2, 0);
+      dish.rotation.z = Math.PI / 6; // 30° tilt (partially deployed)
+      group.add(dish);
+      // RTG boom
+      const boom = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.55, 4), mat);
+      boom.rotation.z = Math.PI / 2;
+      boom.position.set(0.38, -0.05, 0);
+      group.add(boom);
+    } else {
+      // Generic fallback — simple directional craft
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 0.4, 8), mat);
+      body.rotation.x = Math.PI / 2;
+      group.add(body);
+    }
+
+    // Engine glow at rear
+    const glow = this._makeEngineGlow(color, 1.8);
+    glow.position.set(0, -0.3, 0);
+    group.add(glow);
+
+    return group;
   }
 
   clearMission() {

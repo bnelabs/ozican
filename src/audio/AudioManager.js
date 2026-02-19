@@ -13,12 +13,15 @@ const TRACK_PATHS = {
   calm: '/audio/ambient.mp3',
   epic: '/audio/epic.mp3',
   contemplative: '/audio/contemplative.mp3',
+  landing: '/audio/landing.mp3',       // Cinematic Space Journey – Interstellar Odyssey
+  navigation: '/audio/navigation.mp3', // Space Epic Cinematic Journey
 };
 
 const CONTEXT_TRACKS = {
-  overview: 'calm',
-  planet: 'contemplative',
-  mission: 'epic',
+  overview: 'landing',      // was 'calm'
+  planet: 'contemplative',  // unchanged
+  mission: 'navigation',    // was 'epic'
+  flyby: 'navigation',      // flyby mode
 };
 
 class AudioManager {
@@ -36,7 +39,7 @@ class AudioManager {
     const storedVolume = storageGet(VOLUME_KEY);
     this._volume = storedVolume !== null ? parseFloat(storedVolume) : 0.3;
 
-    this._preferredTrack = storageGet(TRACK_KEY, ['calm', 'epic', 'contemplative'], 'epic');
+    this._preferredTrack = storageGet(TRACK_KEY, ['calm', 'epic', 'contemplative', 'landing', 'navigation'], 'landing');
 
     const storedAuto = storageGet(AUTO_KEY);
     this.autoSwitch = storedAuto === null ? true : storedAuto === 'true';

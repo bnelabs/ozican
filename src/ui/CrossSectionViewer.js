@@ -1,13 +1,10 @@
 /**
- * CrossSectionViewer — full-screen cinematic interior cross-section overlay.
+ * CrossSectionViewer — split-screen planet interior viewer.
  *
- * Owns a dedicated, isolated Three.js renderer on a full-screen overlay canvas.
- * No connection to the main scene's clip planes or renderer.
- *
- * Usage:
- *   const viewer = new CrossSectionViewer(announceFn);
- *   viewer.open('earth');
- *   viewer.close();
+ * Left 60%: isolated Three.js renderer — static cross-section sphere,
+ *   quarter-wedge cut facing the camera, dramatic directional lighting.
+ * Right 40%: scrollable layer list sidebar; clicking a row highlights
+ *   that shell in 3D and shows a detail card at the bottom of the sidebar.
  */
 import * as THREE from 'three';
 import { PLANET_LAYERS } from '../data/planetLayers.js';
@@ -16,10 +13,12 @@ import { trapFocus } from '../utils/focusTrap.js';
 import { makeSwipeDismissible } from '../utils/swipe.js';
 import { escapeHTML } from '../utils/sanitize.js';
 
-// Layer type classification (0=rock, 1=mantle, 2=liquid/core, 3=crystal/inner, 4=gas/atm, 5=ice/ocean)
-function classifyLayer(key) {
+// ─── Layer classification ─────────────────────────────────────────────────────
+
+/** 0=rock/crust, 1=mantle, 2=liquid-core, 3=inner-core, 4=gas/atm, 5=ice/ocean */
+function layerType(key) {
   const k = key.toLowerCase();
-  if (k.includes('core') && (k.includes('inner') || k.includes('solid'))) return 3;
+  if (k.includes('inner') && k.includes('core')) return 3;
   if (k.includes('core') || k.includes('metallic')) return 2;
   if (k.includes('mantle') && !k.includes('ice')) return 1;
   if (k.includes('cloud') || k.includes('atmosphere') || k.includes('molecular') ||
@@ -30,477 +29,744 @@ function classifyLayer(key) {
   return 0;
 }
 
-/** Generate a 256×256 canvas texture for a layer type */
-function generateLayerTexture(layer) {
-  const size = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  const lType = classifyLayer(layer.key);
-  const baseColor = layer.color;
-  const deepColor = layer.deepColor || layer.color;
-
-  ctx.fillStyle = baseColor;
-  ctx.fillRect(0, 0, size, size);
-
-  switch (lType) {
-    case 0: // rock — strata-like horizontal variation
-    case 1: { // mantle — similar with subtle convection cells
-      for (let y = 0; y < size; y += 8 + Math.floor(Math.random() * 8)) {
-        const alpha = 0.04 + Math.random() * 0.08;
-        ctx.fillStyle = `rgba(0,0,0,${alpha})`;
-        ctx.fillRect(0, y, size, 2 + Math.floor(Math.random() * 4));
-      }
-      // Subtle brightness patches
-      for (let i = 0; i < 20; i++) {
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        const r = 10 + Math.random() * 40;
-        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-        g.addColorStop(0, `rgba(255,255,255,${0.03 + Math.random() * 0.05})`);
-        g.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, size, size);
-      }
-      break;
-    }
-    case 2: { // liquid core — shimmer
-      const grad = ctx.createRadialGradient(size / 2, size / 2, 10, size / 2, size / 2, size * 0.7);
-      grad.addColorStop(0, 'rgba(255,230,100,0.2)');
-      grad.addColorStop(0.5, 'rgba(255,150,50,0.1)');
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, size, size);
-      // Ripple rings
-      for (let i = 0; i < 4; i++) {
-        const cx = size * 0.3 + Math.random() * size * 0.4;
-        const cy = size * 0.3 + Math.random() * size * 0.4;
-        const maxR = 20 + Math.random() * 40;
-        ctx.beginPath();
-        ctx.arc(cx, cy, maxR, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(255,200,80,${0.08 + Math.random() * 0.08})`;
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-      break;
-    }
-    case 3: { // crystal inner core — voronoi-like facets
-      for (let i = 0; i < 30; i++) {
-        const cx = Math.random() * size;
-        const cy = Math.random() * size;
-        const r = 8 + Math.random() * 25;
-        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-        g.addColorStop(0, 'rgba(255,255,220,0.18)');
-        g.addColorStop(0.4, 'rgba(255,240,180,0.06)');
-        g.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      break;
-    }
-    case 4: { // gas / atmosphere — horizontal bands
-      for (let i = 0; i < 12; i++) {
-        const y = Math.random() * size;
-        const h = 4 + Math.random() * 20;
-        const g = ctx.createLinearGradient(0, y, 0, y + h);
-        g.addColorStop(0, `rgba(255,255,255,${0.04 + Math.random() * 0.06})`);
-        g.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(0, y, size, h);
-      }
-      break;
-    }
-    case 5: { // ice / ocean — cracks / shimmer
-      const ig = ctx.createLinearGradient(0, 0, size, size);
-      ig.addColorStop(0, 'rgba(200,240,255,0.12)');
-      ig.addColorStop(1, 'rgba(50,100,180,0.08)');
-      ctx.fillStyle = ig;
-      ctx.fillRect(0, 0, size, size);
-      // Crack lines
-      for (let i = 0; i < 8; i++) {
-        ctx.beginPath();
-        ctx.moveTo(Math.random() * size, Math.random() * size);
-        ctx.lineTo(Math.random() * size, Math.random() * size);
-        ctx.strokeStyle = `rgba(150,210,255,${0.1 + Math.random() * 0.12})`;
-        ctx.lineWidth = 0.5 + Math.random();
-        ctx.stroke();
-      }
-      break;
-    }
+/** PBR values per layer type. depthFactor: 0=outermost, 1=innermost */
+function layerPBR(lt, depthFactor = 0) {
+  // Base emissive per type — inner layers get dramatic depth gradient on top
+  const emBase = [0.02, 0.06, 0.22, 0.40, 0.03, 0.07];
+  const emissiveFactor = (emBase[lt] ?? 0.03) + depthFactor * depthFactor * 2.8;
+  switch (lt) {
+    case 1: return { roughness: 0.72, metalness: 0.08, emissiveFactor };
+    case 2: return { roughness: 0.28, metalness: 0.50, emissiveFactor };
+    case 3: return { roughness: 0.18, metalness: 0.70, emissiveFactor };
+    case 4: return { roughness: 0.95, metalness: 0.00, emissiveFactor };
+    case 5: return { roughness: 0.38, metalness: 0.12, emissiveFactor };
+    default: return { roughness: 0.86, metalness: 0.04, emissiveFactor };
   }
-
-  return new THREE.CanvasTexture(canvas);
 }
 
-/** Generate simple face-disc CanvasTexture with concentric rings */
+// ─── Cut-face disc texture ────────────────────────────────────────────────────
+
+/**
+ * Brightens a hex color toward white by `factor` (0=original, 1=white).
+ * Makes dark layer colors readable on the 2D cross-section face.
+ */
+function brightenHex(hex, factor) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgb(${Math.round(r + factor * (255 - r))},${
+              Math.round(g + factor * (255 - g))},${
+              Math.round(b + factor * (255 - b))})`;
+}
+
+/**
+ * Generates a 512×512 canvas texture showing the concentric cross-section rings.
+ * Colors are brightened 35% so dark geological colours are clearly legible.
+ */
+/**
+ * Per-layer-type brightness amplification for the flat cut face.
+ * Hot inner layers look vivid/glowing; cold outer layers stay muted.
+ */
+function faceBrightness(lt) {
+  switch (lt) {
+    case 3: return 0.60;  // inner core: blazing golden
+    case 2: return 0.45;  // liquid core: vivid orange-red
+    case 1: return 0.30;  // mantle: warm, moderate
+    case 4: return 0.20;  // gas: pale, wispy
+    case 5: return 0.25;  // ice/ocean: cool, subtle
+    default: return 0.15; // crust/rock: muted gray-tan
+  }
+}
+
+/**
+ * Returns a radial gradient color that goes from hot-inner to cool-outer.
+ * Adds a sense of thermal depth to each ring.
+ */
+function ringGradient(ctx, cx, cy, innerR, outerR, lt) {
+  const g = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
+  if (lt === 3 || lt === 2) {
+    g.addColorStop(0, 'rgba(255,220,80,0.22)');
+    g.addColorStop(1, 'rgba(0,0,0,0.25)');
+  } else if (lt === 1) {
+    g.addColorStop(0, 'rgba(220,100,20,0.18)');
+    g.addColorStop(1, 'rgba(0,0,0,0.22)');
+  } else if (lt === 4) {
+    g.addColorStop(0, 'rgba(160,200,255,0.12)');
+    g.addColorStop(1, 'rgba(0,0,0,0.15)');
+  } else if (lt === 5) {
+    g.addColorStop(0, 'rgba(180,230,255,0.14)');
+    g.addColorStop(1, 'rgba(0,0,0,0.18)');
+  } else {
+    g.addColorStop(0, 'rgba(200,180,140,0.10)');
+    g.addColorStop(1, 'rgba(0,0,0,0.22)');
+  }
+  return g;
+}
+
 function generateFaceTexture(layers) {
-  const size = 512;
+  const S = 512;
   const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = S; canvas.height = S;
   const ctx = canvas.getContext('2d');
-  const cx = size / 2, cy = size / 2;
+  const cx = S / 2, cy = S / 2;
   const maxR = layers[0].r;
 
-  // Draw from innermost layer outward so outer covers inner
-  for (let i = layers.length - 1; i >= 0; i--) {
-    const layer = layers[i];
-    const r = (layer.r / maxR) * (size * 0.48);
+  // Dark background — layers stand out against dark space
+  ctx.fillStyle = '#06060a';
+  ctx.fillRect(0, 0, S, S);
+
+  // Draw rings outermost-first; each inner layer paints over the outer
+  for (let i = 0; i < layers.length; i++) {
+    const lt     = layerType(layers[i].key);
+    const bright = faceBrightness(lt);
+    const r      = (layers[i].r / maxR) * (S * 0.47);
+    const col    = brightenHex(layers[i].color, bright);
+
+    // Solid ring fill
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fillStyle = layer.color;
+    ctx.fillStyle = col;
     ctx.fill();
-    // Subtle texture variation
-    const grad = ctx.createRadialGradient(cx, cy, r * 0.5, cx, cy, r);
-    grad.addColorStop(0, 'rgba(255,255,255,0.04)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.1)');
-    ctx.fillStyle = grad;
+
+    // Thermal depth gradient per ring (hot inner edge, dark outer edge)
+    const innerR = i < layers.length - 1 ? (layers[i + 1].r / maxR) * (S * 0.47) : 0;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    if (innerR > 0) ctx.arc(cx, cy, innerR, 0, Math.PI * 2, true);
+    ctx.fillStyle = ringGradient(ctx, cx, cy, innerR, r, lt);
     ctx.fill();
-    // Boundary ring
-    if (i > 0) {
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255,200,100,0.25)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    }
+
+    // Bright boundary line (glow + sharp edge)
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,240,140,0.22)';
+    ctx.lineWidth = 8;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,250,200,0.95)';
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
   }
+
+  // Central core glow — hot white highlight at innermost layer
+  const innerR = layers.length > 1
+    ? (layers[layers.length - 1].r / maxR) * (S * 0.47)
+    : S * 0.12;
+  const coreGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, innerR * 0.85);
+  coreGlow.addColorStop(0, 'rgba(255,255,255,0.55)');
+  coreGlow.addColorStop(0.4, 'rgba(255,220,120,0.25)');
+  coreGlow.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.beginPath();
+  ctx.arc(cx, cy, innerR * 0.85, 0, Math.PI * 2);
+  ctx.fillStyle = coreGlow;
+  ctx.fill();
 
   return new THREE.CanvasTexture(canvas);
 }
 
-export class CrossSectionViewer {
-  /** @param {function(string):void} announceFn — screen reader announce function from main.js */
-  constructor(announceFn) {
-    this._announce = announceFn || (() => {});
-    this._overlay = document.getElementById('cs-overlay');
-    this._canvas = document.getElementById('cs-canvas');
-    this._labelsEl = document.getElementById('cs-labels');
-    this._bodyNameEl = document.getElementById('cs-body-name');
-    this._closeBtn = document.getElementById('cs-close');
-    this._detailCard = document.getElementById('cs-detail-card');
-    this._detailDot = document.getElementById('cs-detail-dot');
-    this._detailName = document.getElementById('cs-detail-name');
-    this._detailBody = document.getElementById('cs-detail-body');
-    this._detailClose = document.getElementById('cs-detail-close');
-    this._srLayers = document.getElementById('cs-sr-layers');
+// ─── Real planet surface textures ────────────────────────────────────────────
 
-    this._renderer = null;
-    this._scene = null;
-    this._camera = null;
-    this._animId = null;
-    this._disposed = true;
-    this._startTime = 0;
-    this._focusTrap = null;
-    this._swipeHandle = null;
-    this._clipPlane1 = null;
-    this._clipPlane2 = null;
-    this._layerMeshes = [];
-    this._faceMeshes = [];
-    this._coreLight = null;
-    this._labelEls = [];
-    this._activeLayerIndex = -1;
-    this._currentKey = null;
-    this._currentLayers = null;
-    this._resizeObserver = null;
+const BODY_TEXTURE_MAP = {
+  sun:          '/textures/sun_8k.jpg',
+  mercury:      '/textures/mercury_2k.jpg',
+  venus:        '/textures/venus_2k.jpg',
+  earth:        '/textures/earth_2k.jpg',
+  mars:         '/textures/mars_2k.jpg',
+  jupiter:      '/textures/jupiter_2k.jpg',
+  saturn:       '/textures/saturn_2k.jpg',
+  uranus:       '/textures/uranus_2k.jpg',
+  neptune:      '/textures/neptune_2k.jpg',
+  earth_moon_0: '/textures/moon_2k.jpg',
+};
 
-    this._boundClose = () => this.close();
-    this._boundKeydown = (e) => this._onKeydown(e);
+// Canvas multiply-tint for bodies that fall back to moon_2k.jpg
+const BODY_TINTS = {
+  jupiter_moon_0: '#E8C050', // Io: sulfurous orange-yellow
+  jupiter_moon_1: '#D8EAF0', // Europa: icy white-blue
+  jupiter_moon_2: '#907858', // Ganymede: grey-brown
+  jupiter_moon_3: '#504030', // Callisto: very dark dusty
+  saturn_moon_0:  '#D4904A', // Titan: hazy orange
+  saturn_moon_1:  '#F4F0EC', // Enceladus: bright ice
+  pluto:          '#C8A870', // Pluto: pale tan
+  ceres:          '#706860', // Ceres: dark grey
+  eris:           '#E8E4DC', // Eris: icy white
+  haumea:         '#F0E8E0', // Haumea: bright white
+  makemake:       '#C87840', // Makemake: reddish brown
+};
 
-    if (this._closeBtn) this._closeBtn.addEventListener('click', this._boundClose);
-    if (this._detailClose) {
-      this._detailClose.addEventListener('click', () => this._hideDetailCard());
-    }
+// ─── Interior layer texture generators ───────────────────────────────────────
+
+/** 2D value noise (module-level, cs = cross-section prefix) */
+function _csHash(x, y) {
+  let h = ((x * 374761393) ^ (y * 668265263)) | 0;
+  h = ((h ^ (h >>> 13)) * 1274126177) | 0;
+  return ((h ^ (h >>> 16)) & 0x7fffffff) / 0x7fffffff;
+}
+function _csNoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y);
+  const xf = x - xi, yf = y - yi;
+  const sx = xf * xf * (3 - 2 * xf), sy = yf * yf * (3 - 2 * yf);
+  const a = _csHash(xi, yi), b = _csHash(xi+1, yi);
+  const c = _csHash(xi, yi+1), d = _csHash(xi+1, yi+1);
+  return a + sx*(b-a) + sy*(c-a) + sx*sy*(a-b-c+d);
+}
+function _csHexRgb(h) {
+  return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+}
+function _csLerp(a, b, t) {
+  return [
+    Math.round(a[0] + (b[0]-a[0])*t),
+    Math.round(a[1] + (b[1]-a[1])*t),
+    Math.round(a[2] + (b[2]-a[2])*t),
+  ];
+}
+function _clamp8(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
+
+/**
+ * Generates a 256×128 equirectangular CanvasTexture for an interior layer.
+ * Each layer type (mantle, core, ice, gas) gets its own geological pixel shader.
+ */
+function generateLayerTexture(layer, lt) {
+  const W = 256, H = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx   = canvas.getContext('2d');
+  const col   = _csHexRgb(layer.color);
+  const deep  = layer.deepColor
+    ? _csHexRgb(layer.deepColor)
+    : [Math.max(0, col[0]-35), Math.max(0, col[1]-35), Math.max(0, col[2]-35)];
+  const data  = new Uint8ClampedArray(W * H * 4);
+
+  switch (lt) {
+    case 1: _genMantlePx(data, W, H, col, deep); break;
+    case 2: _genMoltenPx(data, W, H, col, deep); break;
+    case 3: _genCrystalPx(data, W, H, col, deep); break;
+    case 4: _genAtmosPx(data, W, H, col, deep); break;
+    case 5: _genIcePx(data, W, H, col, deep); break;
+    default: _genCrustPx(data, W, H, col, deep); break;
   }
 
-  /** Open the cross-section viewer for a body key */
+  ctx.putImageData(new ImageData(data, W, H), 0, 0);
+  return new THREE.CanvasTexture(canvas);
+}
+
+function _genCrustPx(data, W, H, col, deep) {
+  for (let py = 0; py < H; py++) {
+    for (let px = 0; px < W; px++) {
+      const n1 = _csNoise(px*0.022, py*0.022);
+      const n2 = _csNoise(px*0.065, py*0.065) * 0.45;
+      const n3 = _csNoise(px*0.18,  py*0.18 ) * 0.20;
+      const n = (n1 + n2 + n3) / 1.65;
+      const c = _csLerp(deep, col, 0.35 + n * 0.65);
+      const i = (py*W+px)*4;
+      data[i]   = _clamp8(c[0]);
+      data[i+1] = _clamp8(c[1]);
+      data[i+2] = _clamp8(c[2]);
+      data[i+3] = 255;
+    }
+  }
+}
+
+function _genMantlePx(data, W, H, col, deep) {
+  // Hot rock: cool top → glowing hot bottom, wavy strata + convection
+  const hotCol = [Math.min(255,col[0]+80), Math.max(0,col[1]-25), Math.max(0,col[2]-35)];
+  for (let py = 0; py < H; py++) {
+    for (let px = 0; px < W; px++) {
+      const heatGrad = py / H;
+      const n1 = _csNoise(px*0.018, py*0.018);
+      const n2 = _csNoise(px*0.055, py*0.055) * 0.40;
+      const n3 = _csNoise(px*0.15,  py*0.15 ) * 0.18;
+      const n = (n1 + n2 + n3) / 1.58;
+      // Wavy strata lines
+      const strata = 0.5 + 0.5*Math.sin(py*0.22 + _csNoise(px*0.012, py*0.006)*6.0);
+      const rockT  = 0.30 + n * 0.70;
+      const heatT  = heatGrad * 0.60 + strata * 0.14;
+      let c = _csLerp(deep, col, rockT);
+      c = _csLerp(c, hotCol, Math.min(1, heatT));
+      const i = (py*W+px)*4;
+      data[i]   = _clamp8(c[0]);
+      data[i+1] = _clamp8(c[1]);
+      data[i+2] = _clamp8(c[2]);
+      data[i+3] = 255;
+    }
+  }
+}
+
+function _genMoltenPx(data, W, H, col, deep) {
+  // Liquid metal / magma ocean: swirling orange-gold with bright convection plumes
+  for (let py = 0; py < H; py++) {
+    for (let px = 0; px < W; px++) {
+      const n1 = _csNoise(px*0.025, py*0.025);
+      const n2 = _csNoise(px*0.07+3, py*0.07+3) * 0.55;
+      const n3 = _csNoise(px*0.20+7, py*0.20+7) * 0.28;
+      const n = (n1 + n2 + n3) / 1.83;
+      // Rising plumes (bright hot spots at high-noise values)
+      const plume = _csNoise(px*0.035+1.5, py*0.035+1.5);
+      const plumeM = Math.max(0, plume*2 - 1);
+      let c = _csLerp(deep, col, 0.25 + n*0.75);
+      if (plumeM > 0) {
+        const brightCol = [Math.min(255,col[0]+100), Math.min(255,col[1]+60), Math.min(255,col[2]+20)];
+        c = _csLerp(c, brightCol, Math.min(1, plumeM*1.5));
+      }
+      const i = (py*W+px)*4;
+      data[i]   = _clamp8(c[0]);
+      data[i+1] = _clamp8(c[1]);
+      data[i+2] = _clamp8(c[2]);
+      data[i+3] = 255;
+    }
+  }
+}
+
+function _genCrystalPx(data, W, H, col, deep) {
+  // Solid crystalline metallic core: faceted Voronoi-like pattern + bright edge highlights
+  for (let py = 0; py < H; py++) {
+    for (let px = 0; px < W; px++) {
+      const s  = 0.10;
+      const c0 = _csNoise(px*s, py*s);
+      const cx = _csNoise(px*s+0.01, py*s);
+      const cy = _csNoise(px*s, py*s+0.01);
+      const grad = Math.sqrt((cx-c0)*(cx-c0) + (cy-c0)*(cy-c0)) * 100;
+      const n1 = _csNoise(px*0.04, py*0.04);
+      const n2 = _csNoise(px*0.12+5, py*0.12+5) * 0.40;
+      const n = (n1 + n2) / 1.4;
+      const edgeGlow = Math.min(1, grad * 8);
+      const brightCol = [Math.min(255,col[0]+120), Math.min(255,col[1]+100), Math.min(255,col[2]+80)];
+      let c = _csLerp(deep, col, 0.5 + n*0.5);
+      c = _csLerp(c, brightCol, edgeGlow * 0.70);
+      const heat = 0.15 + n * 0.25;
+      c = c.map(v => _clamp8(v * (1 + heat)));
+      const i = (py*W+px)*4;
+      data[i]   = _clamp8(c[0]);
+      data[i+1] = _clamp8(c[1]);
+      data[i+2] = _clamp8(c[2]);
+      data[i+3] = 255;
+    }
+  }
+}
+
+function _genAtmosPx(data, W, H, col, deep) {
+  // Gas/atmosphere: horizontal cloud bands with turbulent edges
+  for (let py = 0; py < H; py++) {
+    for (let px = 0; px < W; px++) {
+      const bandY = (py / H) * 8.0;
+      const wave  = _csNoise(px*0.02, py*0.04) * 1.5;
+      const band  = 0.5 + 0.5*Math.sin((bandY + wave) * Math.PI);
+      const n1    = _csNoise(px*0.03, py*0.03);
+      const n2    = _csNoise(px*0.09+2, py*0.09+2) * 0.40;
+      const turb  = (n1 + n2) / 1.4;
+      const c = _csLerp(deep, col, band*0.60 + turb*0.40);
+      const i = (py*W+px)*4;
+      data[i]   = _clamp8(c[0]);
+      data[i+1] = _clamp8(c[1]);
+      data[i+2] = _clamp8(c[2]);
+      data[i+3] = 255;
+    }
+  }
+}
+
+function _genIcePx(data, W, H, col, deep) {
+  // Ice crust / frozen ocean: smooth bright regions + dark crack network
+  const deepOcean = [Math.max(0,deep[0]-20), Math.max(0,deep[1]-10), Math.min(255,deep[2]+40)];
+  for (let py = 0; py < H; py++) {
+    for (let px = 0; px < W; px++) {
+      const n1 = _csNoise(px*0.012, py*0.012);
+      const n2 = _csNoise(px*0.040+2, py*0.040+2) * 0.45;
+      const n  = (n1 + n2) / 1.45;
+      // Crack detection via noise gradient steepness
+      const sc   = 0.015;
+      const nc   = _csNoise(px*sc, py*sc);
+      const nxd  = _csNoise(px*sc+0.01, py*sc);
+      const nyd  = _csNoise(px*sc, py*sc+0.01);
+      const grad = Math.sqrt((nxd-nc)*(nxd-nc)+(nyd-nc)*(nyd-nc)) * 60;
+      const crack = Math.max(0, 1 - grad * 4); // 0 at crack lines, 1 elsewhere
+      // Icy surface tinted with layer color, subsurface glow from below
+      const bright = [Math.min(255,col[0]+70), Math.min(255,col[1]+70), Math.min(255,col[2]+70)];
+      let c = _csLerp(col, bright, n);
+      c = _csLerp(c, deepOcean, _csNoise(px*0.008, py*0.008) * 0.35);
+      c = c.map(v => _clamp8(v * (0.38 + crack * 0.62)));
+      const i = (py*W+px)*4;
+      data[i]   = _clamp8(c[0]);
+      data[i+1] = _clamp8(c[1]);
+      data[i+2] = _clamp8(c[2]);
+      data[i+3] = 255;
+    }
+  }
+}
+
+// ─── Main class ───────────────────────────────────────────────────────────────
+
+export class CrossSectionViewer {
+  /** @param {function(string):void} announceFn */
+  constructor(announceFn) {
+    this._announce = announceFn || (() => {});
+
+    // DOM elements
+    this._overlay     = document.getElementById('cs-overlay');
+    this._canvas      = document.getElementById('cs-canvas');
+    this._bodyNameEl  = document.getElementById('cs-body-name');
+    this._layerCountEl = document.getElementById('cs-layer-count');
+    this._closeBtn    = document.getElementById('cs-close');
+    this._sidebarList = document.getElementById('cs-layers-list');
+    this._detailPanel = document.getElementById('cs-detail-panel');
+    this._srLayers    = document.getElementById('cs-sr-layers');
+
+    // Three.js handles
+    this._renderer       = null;
+    this._scene          = null;
+    this._camera         = null;
+    this._animId         = null;
+    this._sphereGroup    = null;
+    this._clipPlane1     = null;
+    this._clipPlane2     = null;
+    this._layerMeshes    = [];
+    this._faceMeshes     = [];
+    this._boundaryRings  = [];
+    this._starfield      = null;
+    this._coreLight      = null;
+
+    // Camera intro zoom vectors (reused every frame — no GC)
+    // Camera positioned at +z,+x angle: sees LEFT hemisphere exterior dome (from +z)
+    // AND the face disc at x=0.002 through the cut opening (right side removed).
+    this._camStart = new THREE.Vector3(2.5, 1.0, 5.0);
+    this._camEnd   = new THREE.Vector3(0.8, 0.6, 2.5);
+
+    // SVG connector overlay
+    this._connectorSvg    = document.getElementById('cs-connectors');
+    this._connectorsBuilt = false;
+
+    // State
+    this._disposed         = true;
+    this._startTime        = 0;
+    this._lastFrameTime    = 0;
+    this._activeLayerIndex = -1;
+    this._currentLayers    = null;
+    this._currentKey       = null;
+    this._rowEls           = [];
+
+    // Utilities
+    this._focusTrap      = null;
+    this._swipeHandle    = null;
+    this._resizeObserver = null;
+
+    this._isOpen = false;
+
+    this._boundClose   = () => this.close();
+    this._boundKeydown = (e) => this._onKeydown(e);
+    this._boundLangChange = () => {
+      if (this._isOpen && this._currentLayers) this._refreshLabels();
+    };
+
+    if (this._closeBtn) this._closeBtn.addEventListener('click', this._boundClose);
+    document.addEventListener('langchange', this._boundLangChange);
+  }
+
+  // ─── Public API ─────────────────────────────────────────────────────────────
+
   open(bodyKey) {
     if (!this._overlay) return;
 
     const layers = PLANET_LAYERS[bodyKey];
-    this._currentKey = bodyKey;
+    this._currentKey    = bodyKey;
     this._currentLayers = layers;
 
-    // Set body name from i18n key of first layer's parent, or just format the key
     const bodyName = this._getBodyName(bodyKey);
     if (this._bodyNameEl) this._bodyNameEl.textContent = bodyName;
+    if (this._layerCountEl && layers) {
+      this._layerCountEl.textContent = `${layers.length} ${t('cs.layers') || 'layers'}`;
+    }
 
-    // Build SR layer list
     this._buildSrLayerList(layers);
-
-    // Show overlay
+    this._isOpen = true;
     this._overlay.classList.remove('hidden');
     this._overlay.setAttribute('aria-hidden', 'false');
-
-    // Announce to screen readers
-    this._announce(t('cs.opened') + ' ' + bodyName);
+    this._announce((t('cs.opened') || 'Interior opened for') + ' ' + bodyName);
 
     if (!layers || layers.length === 0) {
       this._showNoData();
       return;
     }
 
-    // Setup Three.js isolated scene
-    this._disposed = false;
+    this._disposed        = false;
+    this._connectorsBuilt = false;
     this._buildScene(layers);
-    this._startTime = performance.now();
+    this._startTime     = performance.now();
+    this._lastFrameTime = this._startTime;
     this._tick();
 
-    // Build CSS labels (start hidden; fly-in is triggered in _tick)
-    this._buildLabels(layers);
+    this._buildSidebarRows(layers);
 
-    // Focus trap
-    this._focusTrap = trapFocus(this._overlay);
-
-    // Swipe-to-dismiss on mobile
+    this._focusTrap   = trapFocus(this._overlay);
     this._swipeHandle = makeSwipeDismissible(this._overlay, () => this.close());
-
-    // Keyboard
     document.addEventListener('keydown', this._boundKeydown);
 
-    // Resize handling
     this._resizeObserver = new ResizeObserver(() => this._onResize());
     this._resizeObserver.observe(this._overlay);
   }
 
-  /** Close and dispose */
   close() {
     if (!this._overlay || this._overlay.classList.contains('hidden')) return;
 
     document.removeEventListener('keydown', this._boundKeydown);
 
-    // Hide detail card first
-    this._hideDetailCard();
-
-    // Fade labels out
-    for (const el of this._labelEls) {
-      el.classList.remove('visible', 'active', 'dimmed');
-    }
-
-    // Stop animation
     if (this._animId) {
       cancelAnimationFrame(this._animId);
       this._animId = null;
     }
 
+    this._isOpen = false;
     this._disposed = true;
-
-    // Dispose Three.js objects
     this._disposeThree();
 
-    // Hide overlay
     this._overlay.classList.add('hidden');
     this._overlay.setAttribute('aria-hidden', 'true');
 
-    // Clear labels
-    if (this._labelsEl) this._labelsEl.innerHTML = '';
-    this._labelEls = [];
-
-    // Release focus trap
-    if (this._focusTrap) {
-      this._focusTrap.release();
-      this._focusTrap = null;
+    if (this._sidebarList) this._sidebarList.innerHTML = '';
+    if (this._detailPanel) {
+      this._detailPanel.innerHTML = '';
+      this._detailPanel.classList.add('hidden');
     }
 
-    // Release swipe
-    if (this._swipeHandle) {
-      this._swipeHandle.release();
-      this._swipeHandle = null;
-    }
+    this._rowEls = [];
+    this._activeLayerIndex = -1;
 
-    // Disconnect resize observer
+    if (this._connectorSvg) this._connectorSvg.innerHTML = '';
+    this._connectorsBuilt = false;
+
+    if (this._focusTrap)   { this._focusTrap.release();   this._focusTrap = null; }
+    if (this._swipeHandle) { this._swipeHandle.release();  this._swipeHandle = null; }
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
       this._resizeObserver = null;
     }
 
-    this._activeLayerIndex = -1;
-    this._currentKey = null;
+    this._currentKey    = null;
     this._currentLayers = null;
-
-    this._announce(t('cs.closed'));
+    this._announce(t('cs.closed') || 'Interior closed');
   }
 
-  // ==================== Scene Setup ====================
+  // ─── Three.js scene ─────────────────────────────────────────────────────────
 
   _buildScene(layers) {
-    const w = this._overlay.clientWidth || window.innerWidth;
-    const h = this._overlay.clientHeight || window.innerHeight;
+    const w = this._canvas.clientWidth  || Math.round(window.innerWidth  * 0.6);
+    const h = this._canvas.clientHeight || Math.max(window.innerHeight, 400);
 
-    // Isolated renderer
     this._renderer = new THREE.WebGLRenderer({
-      canvas: this._canvas,
-      antialias: true,
-      alpha: true,
+      canvas: this._canvas, antialias: true, alpha: true,
     });
     this._renderer.setSize(w, h);
     this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this._renderer.localClippingEnabled = true;
     this._renderer.setClearColor(0x000000, 0);
 
-    // Scene
     this._scene = new THREE.Scene();
 
-    // Camera — angled view for nice perspective
-    this._camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
-    this._camera.position.set(
-      Math.sin(THREE.MathUtils.degToRad(35)) * Math.cos(THREE.MathUtils.degToRad(22)) * 3.2,
-      Math.sin(THREE.MathUtils.degToRad(22)) * 3.2,
-      Math.cos(THREE.MathUtils.degToRad(35)) * Math.cos(THREE.MathUtils.degToRad(22)) * 3.2
-    );
-    this._camera.lookAt(0, 0, 0);
+    // Camera — starts zoomed out and eases in over 1.5 s via _tick
+    this._camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 100);
+    this._camera.position.copy(this._camStart);
+    this._camera.lookAt(0, -0.05, 0);
 
-    // Lights
-    const keyLight = new THREE.PointLight(0xfff8e0, 2.5);
-    keyLight.position.set(-2, 2, 1.5);
+    // ── Lights ──
+    // Key: from upper-front-right — illuminates the cut face (normal +X) AND
+    //   the top of the exterior hemisphere. dot((1,0,0), normalize(3,4,2))=0.56 > 0 ✓
+    const keyLight = new THREE.DirectionalLight(0xfff0d0, 2.6);
+    keyLight.position.set(3, 4, 2);
     this._scene.add(keyLight);
-    this._scene.add(new THREE.AmbientLight(0x334466, 0.4));
 
-    // Clip planes — two perpendicular planes at origin removing a 90° wedge
-    // Start at large offset (nothing clipped), animate to 0
-    this._clipPlane1 = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 2.0);
-    this._clipPlane2 = new THREE.Plane(new THREE.Vector3(0, 0, -1), 2.0);
-    const clipPlanes = [this._clipPlane1, this._clipPlane2];
+    // Rim: from upper-left-back — separates the exterior hemisphere edge
+    const rimLight = new THREE.DirectionalLight(0x4466cc, 0.75);
+    rimLight.position.set(-4, 2, -3);
+    this._scene.add(rimLight);
+
+    // Fill: very dim so far side isn't pure black
+    this._scene.add(new THREE.AmbientLight(0x0c0e1c, 0.45));
+
+    // ── Single clip plane ──
+    // Plane((-1,0,0), c) clips geometry where: -x + c < 0  →  x > c
+    // c=1.5: clips x > 1.5 → nothing clipped (sphere max r=1) → whole sphere shows
+    // c=0.0: clips x > 0 → RIGHT half removed ✓
+    // Camera at (0.8, 0.6, 2.5) sees:
+    //   • LEFT hemisphere exterior (the dome) — visible from the +z camera angle
+    //   • Face disc at x=0.002 through the opening (right side clipped away)
+    // The face disc has no clippingPlanes so it's always rendered.
+    // Animation sweeps c from 1.5 → 0 (blade cuts from right edge to center).
+    this._clipPlane1 = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 1.5);
+    this._clipPlane2 = null; // unused — kept for compat with dispose()
+    const clipPlanes = [this._clipPlane1];
 
     const maxR = layers[0].r;
-    this._layerMeshes = [];
-    this._faceMeshes = [];
+    this._layerMeshes   = [];
+    this._faceMeshes    = [];
+    this._boundaryRings = [];
 
-    // Build concentric layer spheres (outermost → innermost)
+    // ── Starfield ──
+    this._starfield = this._buildStarfield();
+    this._scene.add(this._starfield);
+
+    // ── Concentric sphere shells ──
     for (let i = 0; i < layers.length; i++) {
-      const layer = layers[i];
-      const rNorm = layer.r / maxR; // 0..1
-      const radius = rNorm; // world-space radius 0..1
+      const layer       = layers[i];
+      const radius      = layer.r / maxR;
+      const lt          = layerType(layer.key);
+      const depthFactor = layers.length > 1 ? i / (layers.length - 1) : 0;
+      const pbr         = layerPBR(lt, depthFactor);
 
-      const tex = generateLayerTexture(layer);
+      const baseEmissive = new THREE.Color(layer.color).multiplyScalar(pbr.emissiveFactor);
+
+      // Surface layer (i=0): real planet photo loaded async → start with neutral white.
+      // Inner layers: procedural canvas texture applied immediately.
+      const matColor = i === 0 ? 0xffffff : layer.color;
       const mat = new THREE.MeshStandardMaterial({
-        map: tex,
-        color: layer.color,
-        roughness: 0.75,
-        metalness: classifyLayer(layer.key) >= 2 ? 0.3 : 0.05,
-        clippingPlanes: clipPlanes,
-        clipIntersection: true,
-        side: THREE.DoubleSide,
+        color:             matColor,
+        roughness:         pbr.roughness,
+        metalness:         pbr.metalness,
+        emissive:          baseEmissive,
+        emissiveIntensity: 1.0,
+        clippingPlanes:    clipPlanes,
+        clipIntersection:  false,
+        side:              THREE.FrontSide,
       });
+      mat.userData.baseEmissive = baseEmissive.clone();
 
-      const geo = new THREE.SphereGeometry(radius, 64, 64);
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.userData = { layerIndex: i };
-      this._scene.add(mesh);
+      if (i === 0) {
+        // Outermost layer: load the planet's real photographic texture
+        this._loadSurfaceTexture(this._currentKey, mat);
+      } else {
+        // Inner layers: generated geological canvas texture
+        mat.map = generateLayerTexture(layer, lt);
+        mat.needsUpdate = true;
+      }
+
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 64, 48), mat);
       this._layerMeshes.push(mesh);
     }
 
-    // Face discs — two circles capping the cut
-    // Semi-clip planes to restrict each disc to its half-plane
-    const semiClipZ = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
-    const semiClipX = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0);
-    const outerR = layers[0].r / maxR;
+    // ── Cut-face disc ──
+    // Full circle at x=0.002, facing +X (toward camera).
+    // MeshBasicMaterial — ignores lighting, always shows texture at full brightness.
+    // Depth-test hides it inside the sphere until the left side is cut away.
     const faceTex = generateFaceTexture(layers);
-
-    // Face 1: X-cut face (normal = +X, restricted to -Z hemisphere by semiClipZ)
-    const faceMat1 = new THREE.MeshStandardMaterial({
-      map: faceTex,
-      color: '#ffffff',
-      roughness: 0.5,
-      metalness: 0.1,
-      clippingPlanes: [semiClipZ],
-      clipIntersection: false,
-      side: THREE.DoubleSide,
-      emissive: new THREE.Color(layers[layers.length - 1].color).multiplyScalar(0.08),
+    const faceMat = new THREE.MeshBasicMaterial({
+      map:  faceTex,
+      side: THREE.FrontSide,
     });
-    const faceGeo1 = new THREE.CircleGeometry(outerR, 128);
-    const faceMesh1 = new THREE.Mesh(faceGeo1, faceMat1);
-    faceMesh1.rotation.y = Math.PI / 2;
-    faceMesh1.position.x = 0.001;
-    this._scene.add(faceMesh1);
-    this._faceMeshes.push(faceMesh1);
+    const faceMesh = new THREE.Mesh(new THREE.CircleGeometry(1.0, 128), faceMat);
+    faceMesh.rotation.y = Math.PI / 2; // +Z face → face +X toward camera ✓
+    faceMesh.position.x = 0.002;
+    this._faceMeshes.push(faceMesh);
 
-    // Face 2: Z-cut face (normal = +Z, restricted to -X hemisphere by semiClipX)
-    const faceMat2 = new THREE.MeshStandardMaterial({
-      map: faceTex,
-      color: '#ffffff',
-      roughness: 0.5,
-      metalness: 0.1,
-      clippingPlanes: [semiClipX],
-      clipIntersection: false,
-      side: THREE.DoubleSide,
-      emissive: new THREE.Color(layers[layers.length - 1].color).multiplyScalar(0.08),
-    });
-    const faceGeo2 = new THREE.CircleGeometry(outerR, 128);
-    const faceMesh2 = new THREE.Mesh(faceGeo2, faceMat2);
-    faceMesh2.rotation.x = -Math.PI / 2;
-    faceMesh2.position.z = 0.001;
-    this._scene.add(faceMesh2);
-    this._faceMeshes.push(faceMesh2);
+    // ── Layer boundary rings (glowing halos on the cut face) ──
+    // Placed in the YZ plane (rotation.y = PI/2) at x=0.005 — in front of the
+    // face disc (x=0.002) so they appear as bright ring outlines.
+    // The clip plane clips x < 0; with position.x=0.005 the torus is fully in
+    // the x≥0 region so no partial-ring artifacts.
+    for (let i = 0; i < layers.length; i++) {
+      const radius = layers[i].r / maxR;
+      const col    = new THREE.Color(layers[i].color);
+      col.r = Math.min(1, col.r + 0.45);
+      col.g = Math.min(1, col.g + 0.45);
+      col.b = Math.min(1, col.b + 0.45);
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(radius, 0.007, 8, 96),
+        new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85 }),
+      );
+      ring.rotation.y = Math.PI / 2;
+      ring.position.x = 0.005;
+      this._boundaryRings.push(ring);
+    }
 
-    // Core pulsing light
-    const coreColor = new THREE.Color(layers[layers.length - 1].color);
-    this._coreLight = new THREE.PointLight(coreColor, 0, layers[layers.length - 1].r / maxR * 2.5, 1.5);
+    // ── Core glow light ──
+    const innerColor = new THREE.Color(layers[layers.length - 1].color);
+    this._coreLight  = new THREE.PointLight(innerColor, 0, 3.0, 1.8);
     this._scene.add(this._coreLight);
 
-    // Group for Y-rotation
+    // ── Sphere group (for scale-in animation) ──
     this._sphereGroup = new THREE.Group();
-    // Move layer meshes + face meshes into the group
-    for (const m of [...this._layerMeshes, ...this._faceMeshes]) {
-      this._scene.remove(m);
+    for (const m of [...this._layerMeshes, ...this._faceMeshes, ...this._boundaryRings]) {
       this._sphereGroup.add(m);
     }
+    this._sphereGroup.scale.setScalar(0);
     this._scene.add(this._sphereGroup);
-    this._sphereGroup.scale.set(0, 0, 0); // start invisible, scale up in animation
-
-    // Core light stays at scene root (not in group, so it doesn't orbit)
-    this._scene.add(this._coreLight);
   }
 
-  // ==================== Animation ====================
+  // ─── Animation loop ──────────────────────────────────────────────────────────
 
   _tick() {
     if (this._disposed) return;
-    const now = performance.now();
-    const elapsed = (now - this._startTime) * 0.001; // seconds
 
-    // --- Phase 1: Sphere appear (0.3 – 1.0 s) ---
-    const sphereT = Math.min(Math.max((elapsed - 0.3) / 0.7, 0), 1);
-    const sphereScale = this._easeOut(sphereT);
+    const now     = performance.now();
+    const elapsed = (now - this._startTime) * 0.001;
+    const delta   = Math.min((now - this._lastFrameTime) * 0.001, 0.05);
+    this._lastFrameTime = now;
+
+    // ── Phase 1: sphere scales in (0.15 → 0.85 s), ease-out-back overshoot ──
+    const scaleT = Math.min(Math.max((elapsed - 0.15) / 0.70, 0), 1);
     if (this._sphereGroup) {
-      this._sphereGroup.scale.setScalar(sphereScale);
+      this._sphereGroup.scale.setScalar(this._easeOutBack(scaleT));
     }
 
-    // --- Phase 2: Cut opens (1.0 – 3.2 s) ---
-    const cutT = Math.min(Math.max((elapsed - 1.0) / 2.2, 0), 1);
-    const cutEased = this._easeOutCubic(cutT);
-    // clipPlane constants animate from 2.0 → 0
-    const clipConst = 2.0 * (1 - cutEased);
+    // ── Phase 2: knife-cut sweeps from right edge to centre (0.85 → 2.5 s) ──
+    // Clip constant goes 1.5 → 0: looks like a blade slicing through the planet.
+    const cutT      = Math.min(Math.max((elapsed - 0.85) / 1.65, 0), 1);
+    const clipConst = 1.5 * (1 - this._easeOutCubic(cutT));
     if (this._clipPlane1) this._clipPlane1.constant = clipConst;
-    if (this._clipPlane2) this._clipPlane2.constant = clipConst;
 
-    // --- Phase 3: Labels fly in (1.4 s + staggered 0.3 s) ---
-    if (this._labelEls.length > 0) {
-      for (let i = 0; i < this._labelEls.length; i++) {
-        const labelStart = 1.4 + i * 0.3;
-        if (elapsed >= labelStart) {
-          this._labelEls[i].classList.add('visible');
+    // ── Phase 2b: per-layer reveal flash ──
+    // Clip plane: Plane((-1,0,0), c) clips x > c, c: 1.5→0.
+    // c = 1.5*(1 - easeOutCubic(cutT)).
+    // Layer at normalised radius r is first cut when c = r.
+    // Solving: r = 1.5*(1-easeOut(t)) → easeOut(t) = 1-r/1.5
+    //   → t = 1 - (r/1.5)^(1/3)   (exact easeOutCubic inverse)
+    // Outer layers (r≈1) flash first (t≈0), inner last (t closer to 1).
+    if (this._activeLayerIndex < 0 && this._currentLayers) {
+      const maxR = this._currentLayers[0].r;
+      for (let i = 0; i < this._layerMeshes.length; i++) {
+        const normR      = this._currentLayers[i].r / maxR;
+        const revealCutT = Math.max(0, 1 - Math.pow(normR / 1.5, 1 / 3)); // exact inverse
+        const postReveal = cutT - revealCutT; // >0 after reveal
+        const mat        = this._layerMeshes[i].material;
+        const base       = mat.userData.baseEmissive;
+        if (postReveal >= 0 && postReveal < 0.28) {
+          // brief emissive flash for ~0.28 s after the layer is first exposed
+          const flashT = postReveal / 0.28;
+          const boost  = 4.5 * Math.sin(flashT * Math.PI);
+          mat.emissive = base.clone().multiplyScalar(1 + boost);
+        } else {
+          mat.emissive = base.clone();
         }
+        mat.emissiveIntensity = 1.0;
       }
     }
 
-    // --- Idle rotation (3.2 s+) ---
-    const rotSpeed = elapsed < 3.2 ? 8 : 4; // deg/s
-    if (this._sphereGroup) {
-      this._sphereGroup.rotation.y += THREE.MathUtils.degToRad(rotSpeed) * (1 / 60); // approximate per-frame
+    // ── Phase 3: sidebar rows slide in staggered (1.0 s + 0.12 s per row) ──
+    for (let i = 0; i < this._rowEls.length; i++) {
+      if (elapsed >= 1.0 + i * 0.12) {
+        this._rowEls[i].classList.add('visible');
+      }
     }
 
-    // --- Core light pulse ---
-    if (this._coreLight && elapsed > 3.2) {
-      this._coreLight.intensity = 1.2 + Math.sin(elapsed * 1.2) * 0.4;
-    } else if (this._coreLight) {
-      this._coreLight.intensity = cutEased * 1.2;
+    // ── Idle: NO sphere rotation — face disc must stay aligned with cut plane ──
+    // (clip plane is in world space; rotating the sphere would offset the face disc)
+
+    // ── Core light: fades in with the cut, then pulses gently ──
+    if (this._coreLight) {
+      const base  = cutT * 1.6;
+      const pulse = elapsed > 2.5 ? Math.sin(elapsed * 1.2) * 0.35 : 0;
+      this._coreLight.intensity = base + pulse;
     }
 
-    // Render
+    // ── Camera intro zoom: ease from far (start) → close (end) over 1.5 s ──
+    if (this._camera) {
+      const camT = this._easeOutCubic(Math.min(elapsed / 1.5, 1.0));
+      this._camera.position.lerpVectors(this._camStart, this._camEnd, camT);
+      this._camera.lookAt(0, -0.05, 0);
+    }
+
+    // ── Build SVG leader lines once after camera + cut have settled ──
+    if (!this._connectorsBuilt && elapsed > 2.9) {
+      this._buildConnectors();
+    }
+
     if (this._renderer && this._scene && this._camera) {
       this._renderer.render(this._scene, this._camera);
     }
@@ -508,230 +774,365 @@ export class CrossSectionViewer {
     this._animId = requestAnimationFrame(() => this._tick());
   }
 
-  _easeOut(t) {
-    return 1 - Math.pow(1 - t, 2.5);
+  _easeOutBack(t) {
+    const c1 = 1.70158, c3 = c1 + 1;
+    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
   }
 
   _easeOutCubic(t) {
     return 1 - Math.pow(1 - t, 3);
   }
 
-  // ==================== CSS Labels ====================
+  /** Builds a starfield of N random points at r=12–20 around the origin. */
+  _buildStarfield() {
+    const N   = 600;
+    const buf = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++) {
+      const r     = 12 + Math.random() * 8;
+      const theta = Math.acos(2 * Math.random() - 1);
+      const phi   = Math.random() * Math.PI * 2;
+      buf[i * 3]     = r * Math.sin(theta) * Math.cos(phi);
+      buf[i * 3 + 1] = r * Math.sin(theta) * Math.sin(phi);
+      buf[i * 3 + 2] = r * Math.cos(theta);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(buf, 3));
+    const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.055, sizeAttenuation: true });
+    return new THREE.Points(geo, mat);
+  }
 
-  _buildLabels(layers) {
-    if (!this._labelsEl) return;
-    this._labelsEl.innerHTML = '';
-    this._labelEls = [];
+  // ─── Surface texture loader ──────────────────────────────────────────────────
 
-    const maxR = layers[0].r;
+  /**
+   * Loads the planet's real photographic texture and applies it to the outermost
+   * sphere material. Bodies without a dedicated texture use moon_2k.jpg tinted
+   * with a canvas multiply overlay to match their known spectral appearance.
+   */
+  _loadSurfaceTexture(bodyKey, mat) {
+    const path = BODY_TEXTURE_MAP[bodyKey] || '/textures/moon_2k.jpg';
+    const tint = BODY_TINTS[bodyKey] || null;
+
+    new THREE.TextureLoader().load(path, (tex) => {
+      if (this._disposed) return; // viewer was closed before texture finished loading
+      if (tint) {
+        // Bake a tinted version into a canvas so each body looks distinct
+        const W = 512, H = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = W; canvas.height = H;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(tex.image, 0, 0, W, H);
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = tint;
+        ctx.fillRect(0, 0, W, H);
+        mat.map = new THREE.CanvasTexture(canvas);
+      } else {
+        mat.map = tex;
+      }
+      mat.color.set(0xffffff); // texture carries full colour; no additional tint
+      mat.needsUpdate = true;
+    });
+  }
+
+  // ─── SVG leader lines ────────────────────────────────────────────────────────
+
+  /**
+   * Projects each layer's ring-edge to screen coords and draws dashed SVG lines
+   * from the sphere cut face to the corresponding sidebar row dot.
+   * Called once when elapsed > 2.9 s, and again after resize.
+   */
+  _buildConnectors() {
+    if (this._connectorsBuilt) return;
+    if (!this._connectorSvg || !this._camera || !this._currentLayers) return;
+    if (!this._rowEls.length || !this._canvas) return;
+
+    const bodyEl = this._overlay.querySelector('#cs-body');
+    if (!bodyEl) return;
+
+    this._connectorsBuilt = true;
+    const svg = this._connectorSvg;
+    svg.innerHTML = '';
+
+    const bodyRect   = bodyEl.getBoundingClientRect();
+    const canvasRect = this._canvas.getBoundingClientRect();
+    if (bodyRect.width === 0 || bodyRect.height === 0) return;
+
+    // SVG coordinate space = #cs-body bounding rect
+    svg.setAttribute('viewBox', `0 0 ${bodyRect.width} ${bodyRect.height}`);
+
+    const maxR   = this._currentLayers[0].r;
+    const tmpVec = new THREE.Vector3();
+
+    for (let i = 0; i < this._currentLayers.length; i++) {
+      const layer  = this._currentLayers[i];
+      const rowEl  = this._rowEls[i];
+      if (!rowEl) continue;
+
+      const r = layer.r / maxR; // normalised sphere radius for this layer
+
+      // Find the rightmost-in-screen-space point on the ring (in the cut face YZ plane).
+      // Sample 24 angles; the ring is at (0, r·sin(a), r·cos(a)) for angle a.
+      let bestNdcX = -Infinity;
+      let anchorSX = 0, anchorSY = 0;
+      for (let a = 0; a < 24; a++) {
+        const ang = (a / 24) * Math.PI * 2;
+        tmpVec.set(0.006, r * Math.sin(ang), r * Math.cos(ang));
+        const ndc = tmpVec.clone().project(this._camera);
+        const sx  = (ndc.x * 0.5 + 0.5) * canvasRect.width;
+        if (sx > bestNdcX) {
+          bestNdcX  = sx;
+          anchorSX  = sx;
+          anchorSY  = (-ndc.y * 0.5 + 0.5) * canvasRect.height;
+        }
+      }
+
+      // Convert canvas-local coords to #cs-body coords
+      const aX = anchorSX + (canvasRect.left - bodyRect.left);
+      const aY = anchorSY + (canvasRect.top  - bodyRect.top);
+
+      // Target: the colored dot in the sidebar row
+      const dotEl   = rowEl.querySelector('.cs-layer-dot');
+      const dotRect = dotEl ? dotEl.getBoundingClientRect() : rowEl.getBoundingClientRect();
+      const tX = dotRect.left + dotRect.width  * 0.5 - bodyRect.left;
+      const tY = dotRect.top  + dotRect.height * 0.5 - bodyRect.top;
+
+      // Leader line: dashed, in the layer's color
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', aX.toFixed(1));
+      line.setAttribute('y1', aY.toFixed(1));
+      line.setAttribute('x2', tX.toFixed(1));
+      line.setAttribute('y2', tY.toFixed(1));
+      line.setAttribute('stroke', layer.color);
+      line.setAttribute('stroke-width', '1.5');
+      line.setAttribute('stroke-opacity', '0.60');
+      line.setAttribute('stroke-dasharray', '5,3');
+      svg.appendChild(line);
+
+      // Anchor dot on the sphere face
+      const aDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      aDot.setAttribute('cx', aX.toFixed(1));
+      aDot.setAttribute('cy', aY.toFixed(1));
+      aDot.setAttribute('r', '3.5');
+      aDot.setAttribute('fill', layer.color);
+      aDot.setAttribute('fill-opacity', '0.85');
+      svg.appendChild(aDot);
+
+      // Small circle at the sidebar dot end for a clean termination
+      const tDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      tDot.setAttribute('cx', tX.toFixed(1));
+      tDot.setAttribute('cy', tY.toFixed(1));
+      tDot.setAttribute('r', '2.5');
+      tDot.setAttribute('fill', 'none');
+      tDot.setAttribute('stroke', layer.color);
+      tDot.setAttribute('stroke-width', '1.5');
+      tDot.setAttribute('stroke-opacity', '0.70');
+      svg.appendChild(tDot);
+    }
+  }
+
+  // ─── Sidebar ─────────────────────────────────────────────────────────────────
+
+  _buildSidebarRows(layers) {
+    if (!this._sidebarList) return;
+    this._sidebarList.innerHTML = '';
+    this._rowEls = [];
 
     for (let i = 0; i < layers.length; i++) {
       const layer = layers[i];
-      const rNorm = layer.r / maxR;
 
-      const el = document.createElement('div');
-      el.className = 'cs-label';
-      el.setAttribute('role', 'button');
-      el.setAttribute('tabindex', '0');
-      el.setAttribute('aria-label', t(layer.key));
+      const row = document.createElement('button');
+      row.className = 'cs-layer-row';
+      row.type      = 'button';
+      row.setAttribute('aria-label', t(layer.key));
 
-      const leader = document.createElement('div');
-      leader.className = 'cs-leader';
+      const dot = document.createElement('span');
+      dot.className = 'cs-layer-dot';
+      dot.style.cssText = `background:${layer.color}; box-shadow:0 0 5px ${layer.color}99;`;
 
-      const dot = document.createElement('div');
-      dot.className = 'cs-label-dot';
-      dot.style.color = layer.color;
-      dot.style.background = layer.color;
+      const text = document.createElement('span');
+      text.className = 'cs-layer-text';
 
-      const content = document.createElement('div');
-      content.className = 'cs-label-content';
-
-      const name = document.createElement('div');
-      name.className = 'cs-label-name';
+      const name = document.createElement('span');
+      name.className   = 'cs-layer-name';
       name.textContent = t(layer.key);
 
-      const comp = document.createElement('div');
-      comp.className = 'cs-label-comp';
-      comp.textContent = layer.compositionShort || '';
+      const comp = document.createElement('span');
+      comp.className   = 'cs-layer-comp';
+      comp.textContent = layer.compositionShort ? t(layer.compositionShort) : '';
 
-      const stat = document.createElement('div');
-      stat.className = 'cs-label-stat';
-      stat.textContent = layer.thickness || layer.temperatureRange || '';
+      const stat = document.createElement('span');
+      stat.className   = 'cs-layer-stat';
+      stat.textContent = layer.thickness ? t(layer.thickness) : (layer.temperatureRange ? t(layer.temperatureRange) : '');
 
-      content.append(name, comp, stat);
-      el.append(leader, dot, content);
-
-      // Position: project layer centroid to screen
-      el.dataset.layerIndex = String(i);
-      el.dataset.rNorm = String(rNorm);
+      text.append(name, comp, stat);
+      row.append(dot, text);
 
       const idx = i;
-      el.addEventListener('click', () => this._onLabelClick(idx));
-      el.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._onLabelClick(idx); }
+      row.addEventListener('click', () => this._onLayerClick(idx));
+      this._sidebarList.appendChild(row);
+      this._rowEls.push(row);
+    }
+  }
+
+  /** Re-render sidebar labels and open detail card after language change. */
+  _refreshLabels() {
+    if (!this._currentLayers || !this._sidebarList) return;
+    // Rebuild layer row text content only (keep DOM structure, just update text)
+    const rows = this._sidebarList.querySelectorAll('.cs-layer-row');
+    this._currentLayers.forEach((layer, i) => {
+      const row = rows[i];
+      if (!row) return;
+      row.setAttribute('aria-label', t(layer.key));
+      const nameEl = row.querySelector('.cs-layer-name');
+      const compEl = row.querySelector('.cs-layer-comp');
+      const statEl = row.querySelector('.cs-layer-stat');
+      if (nameEl) nameEl.textContent = t(layer.key);
+      if (compEl) compEl.textContent = layer.compositionShort ? t(layer.compositionShort) : '';
+      if (statEl) statEl.textContent = layer.thickness ? t(layer.thickness) : (layer.temperatureRange ? t(layer.temperatureRange) : '');
+    });
+    // Re-render open detail panel if any
+    if (this._activeLayerIndex >= 0 && this._currentLayers[this._activeLayerIndex]) {
+      this._showDetailPanel(this._currentLayers[this._activeLayerIndex]);
+    }
+    this._buildSrLayerList(this._currentLayers);
+  }
+
+  _onLayerClick(index) {
+    if (this._activeLayerIndex === index) {
+      // Second click on same row → deselect
+      this._clearHighlight();
+      this._hideDetailPanel();
+      return;
+    }
+
+    this._activeLayerIndex = index;
+
+    for (let i = 0; i < this._rowEls.length; i++) {
+      this._rowEls[i].classList.toggle('active', i === index);
+      this._rowEls[i].classList.toggle('dimmed', i !== index);
+    }
+
+    this._highlightLayer(index);
+    this._showDetailPanel(this._currentLayers[index]);
+  }
+
+  _highlightLayer(index) {
+    if (!this._layerMeshes.length) return;
+    for (let i = 0; i < this._layerMeshes.length; i++) {
+      const mat  = this._layerMeshes[i].material;
+      const base = mat.userData.baseEmissive;
+      if (i === index) {
+        // Active shell — strong emissive glow
+        mat.emissive = base.clone().multiplyScalar(5.5);
+      } else {
+        // Inactive shells — dim down
+        mat.emissive = base.clone().multiplyScalar(0.25);
+      }
+      mat.emissiveIntensity = 1.0;
+    }
+  }
+
+  _clearHighlight() {
+    this._activeLayerIndex = -1;
+    for (let i = 0; i < this._layerMeshes.length; i++) {
+      const mat = this._layerMeshes[i].material;
+      mat.emissive          = mat.userData.baseEmissive.clone();
+      mat.emissiveIntensity = 1.0;
+    }
+    for (const row of this._rowEls) {
+      row.classList.remove('active', 'dimmed');
+    }
+  }
+
+  // ─── Detail panel ────────────────────────────────────────────────────────────
+
+  _showDetailPanel(layer) {
+    if (!this._detailPanel) return;
+
+    const rows = [];
+    if (layer.compositionFull || layer.compositionShort) {
+      rows.push({ label: t('cs.composition'), value: t(layer.compositionFull || layer.compositionShort) });
+    }
+    if (layer.thickness)       rows.push({ label: t('cs.thickness'),    value: t(layer.thickness) });
+    if (layer.temperatureRange) rows.push({ label: t('cs.temperature'), value: t(layer.temperatureRange) });
+    if (layer.pressureRange)   rows.push({ label: t('cs.pressure'),     value: t(layer.pressureRange) });
+    if (layer.state)           rows.push({ label: t('cs.state'),        value: t(layer.state) });
+
+    let html = `
+      <div class="cs-detail-header">
+        <span class="cs-detail-dot"
+              style="background:${escapeHTML(layer.color)};
+                     box-shadow:0 0 8px ${escapeHTML(layer.color)}99;"></span>
+        <span class="cs-detail-title">${escapeHTML(t(layer.key))}</span>
+        <button class="cs-detail-close" id="cs-detail-close-btn"
+                aria-label="${escapeHTML(t('cs.close') || 'Close')}">&times;</button>
+      </div>`;
+
+    html += rows.map(r => `
+      <div class="cs-detail-row">
+        <div class="cs-detail-label">${escapeHTML(r.label)}</div>
+        <div class="cs-detail-value">${escapeHTML(r.value)}</div>
+      </div>`).join('');
+
+    if (layer.funFact) {
+      html += `
+        <div class="cs-detail-funfact">
+          <div class="cs-detail-label">${escapeHTML(t('cs.funFact'))}</div>
+          <div class="cs-detail-value">${escapeHTML(t(layer.funFact))}</div>
+        </div>`;
+    }
+
+    this._detailPanel.innerHTML = html;
+    this._detailPanel.classList.remove('hidden');
+
+    const closeBtn = document.getElementById('cs-detail-close-btn');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        this._clearHighlight();
+        this._hideDetailPanel();
       });
-
-      this._labelsEl.appendChild(el);
-      this._labelEls.push(el);
-    }
-
-    // Position labels after build
-    this._positionLabels();
-  }
-
-  _positionLabels() {
-    if (!this._camera || !this._labelEls.length || !this._currentLayers) return;
-
-    const layers = this._currentLayers;
-    const maxR = layers[0].r;
-    const overlayW = this._overlay.clientWidth;
-    const overlayH = this._overlay.clientHeight;
-    const halfW = overlayW / 2;
-    const halfH = overlayH / 2;
-
-    for (let i = 0; i < this._labelEls.length; i++) {
-      const el = this._labelEls[i];
-      const rNorm = layers[i].r / maxR;
-      // Project a point on the sphere surface in the visible (right-front) quadrant
-      // Use an angle between 30° and 60° from front, at equatorial height
-      const angle = THREE.MathUtils.degToRad(30 + i * 5);
-      const worldPos = new THREE.Vector3(
-        Math.cos(angle) * rNorm * 0.9,
-        (0.4 - i * 0.15) * rNorm,
-        Math.sin(angle) * rNorm * 0.9
-      );
-
-      worldPos.project(this._camera);
-
-      const sx = (worldPos.x * halfW) + halfW;
-      const sy = -(worldPos.y * halfH) + halfH;
-
-      // Clamp to overlay bounds
-      const clampedX = Math.max(10, Math.min(overlayW - 200, sx));
-      const clampedY = Math.max(60, Math.min(overlayH - 80, sy));
-
-      el.style.left = `${clampedX}px`;
-      el.style.top = `${clampedY}px`;
     }
   }
+
+  _hideDetailPanel() {
+    if (!this._detailPanel) return;
+    this._detailPanel.classList.add('hidden');
+    this._detailPanel.innerHTML = '';
+  }
+
+  // ─── Keyboard ────────────────────────────────────────────────────────────────
+
+  _onKeydown(e) {
+    if (e.key !== 'Escape') return;
+    if (this._activeLayerIndex >= 0) {
+      this._clearHighlight();
+      this._hideDetailPanel();
+    } else {
+      this.close();
+    }
+  }
+
+  // ─── Resize ──────────────────────────────────────────────────────────────────
 
   _onResize() {
-    if (!this._renderer || !this._camera) return;
-    const w = this._overlay.clientWidth;
-    const h = this._overlay.clientHeight;
+    if (!this._renderer || !this._camera || !this._canvas) return;
+    const w = this._canvas.clientWidth;
+    const h = this._canvas.clientHeight;
+    if (w === 0 || h === 0) return;
     this._renderer.setSize(w, h);
     this._camera.aspect = w / h;
     this._camera.updateProjectionMatrix();
-    this._positionLabels();
-  }
 
-  // ==================== Label Click + Detail Card ====================
-
-  _onLabelClick(index) {
-    this._activeLayerIndex = index;
-
-    // Update label classes
-    for (let i = 0; i < this._labelEls.length; i++) {
-      this._labelEls[i].classList.remove('active', 'dimmed');
-      if (i === index) {
-        this._labelEls[i].classList.add('active');
-      } else {
-        this._labelEls[i].classList.add('dimmed');
-      }
-    }
-
-    this._showDetailCard(this._currentLayers[index]);
-  }
-
-  _showDetailCard(layer) {
-    if (!this._detailCard) return;
-
-    if (this._detailDot) {
-      this._detailDot.style.background = layer.color;
-    }
-    if (this._detailName) {
-      this._detailName.textContent = t(layer.key);
-    }
-    if (this._detailBody) {
-      const rows = [];
-
-      if (layer.compositionShort) {
-        rows.push({ label: t('cs.composition'), value: layer.compositionFull || layer.compositionShort });
-      }
-      if (layer.thickness) {
-        rows.push({ label: t('cs.thickness'), value: layer.thickness });
-      }
-      if (layer.temperatureRange) {
-        rows.push({ label: t('cs.temperature'), value: layer.temperatureRange });
-      }
-      if (layer.pressureRange) {
-        rows.push({ label: t('cs.pressure'), value: layer.pressureRange });
-      }
-      if (layer.state) {
-        rows.push({ label: t('cs.state'), value: layer.state });
-      }
-
-      let html = rows.map(r => `
-        <div class="cs-detail-row">
-          <div class="cs-detail-label">${escapeHTML(r.label)}</div>
-          <div class="cs-detail-value">${escapeHTML(r.value)}</div>
-        </div>
-      `).join('');
-
-      if (layer.funFact) {
-        html += `
-          <div class="cs-detail-funfact">
-            <div class="cs-detail-label">${escapeHTML(t('cs.funFact'))}</div>
-            <div class="cs-detail-value">${escapeHTML(layer.funFact)}</div>
-          </div>
-        `;
-      }
-
-      this._detailBody.innerHTML = html;
-    }
-
-    this._detailCard.classList.remove('hidden');
-  }
-
-  _hideDetailCard() {
-    if (!this._detailCard) return;
-    this._detailCard.classList.add('hidden');
-
-    // Un-dim all labels
-    for (const el of this._labelEls) {
-      el.classList.remove('active', 'dimmed');
-    }
-    this._activeLayerIndex = -1;
-  }
-
-  // ==================== Keyboard ====================
-
-  _onKeydown(e) {
-    if (e.key === 'Escape') {
-      if (this._activeLayerIndex >= 0) {
-        // First ESC: close detail card
-        this._hideDetailCard();
-      } else {
-        // Second ESC: close overlay
-        this.close();
-      }
+    // Rebuild connectors for new dimensions (only if they were already built)
+    if (this._connectorsBuilt) {
+      this._connectorsBuilt = false;
+      // Defer one frame so the layout reflow completes first
+      requestAnimationFrame(() => this._buildConnectors());
     }
   }
 
-  // ==================== No-data fallback ====================
-
-  _showNoData() {
-    if (!this._labelsEl) return;
-    const msg = document.createElement('div');
-    msg.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:rgba(200,200,200,0.7);font-family:var(--font-display);font-size:1rem;text-align:center;';
-    msg.textContent = t('cs.noData');
-    this._labelsEl.appendChild(msg);
-  }
-
-  // ==================== Utilities ====================
+  // ─── Utilities ───────────────────────────────────────────────────────────────
 
   _getBodyName(key) {
-    // Try to extract a nice body name from the key
     const map = {
       sun: 'Sun',
       mercury: 'Mercury', venus: 'Venus', earth: 'Earth', mars: 'Mars',
@@ -748,7 +1149,7 @@ export class CrossSectionViewer {
   _buildSrLayerList(layers) {
     if (!this._srLayers) return;
     this._srLayers.innerHTML = '';
-    this._srLayers.setAttribute('aria-label', t('cs.layersLabel') || 'Geological layers from surface to centre');
+    this._srLayers.setAttribute('aria-label', t('cs.layersLabel') || 'Geological layers');
     if (!layers) return;
     for (let i = layers.length - 1; i >= 0; i--) {
       const li = document.createElement('li');
@@ -757,33 +1158,47 @@ export class CrossSectionViewer {
     }
   }
 
-  // ==================== Dispose ====================
+  _showNoData() {
+    if (!this._sidebarList) return;
+    const p = document.createElement('p');
+    p.style.cssText = 'color:rgba(200,200,200,0.55);font-size:0.88rem;padding:20px 16px;';
+    p.textContent   = t('cs.noData');
+    this._sidebarList.appendChild(p);
+  }
+
+  // ─── Dispose ─────────────────────────────────────────────────────────────────
 
   _disposeThree() {
-    for (const mesh of [...(this._layerMeshes || []), ...(this._faceMeshes || [])]) {
-      if (mesh.geometry) mesh.geometry.dispose();
+    for (const mesh of [
+      ...(this._layerMeshes   || []),
+      ...(this._faceMeshes    || []),
+      ...(this._boundaryRings || []),
+    ]) {
+      mesh.geometry?.dispose();
       if (mesh.material) {
-        if (mesh.material.map) mesh.material.map.dispose();
+        mesh.material.map?.dispose();
         mesh.material.dispose();
       }
     }
-    this._layerMeshes = [];
-    this._faceMeshes = [];
+    this._layerMeshes   = [];
+    this._faceMeshes    = [];
+    this._boundaryRings = [];
 
-    if (this._coreLight) {
-      if (this._coreLight.parent) this._coreLight.parent.remove(this._coreLight);
-      this._coreLight = null;
+    if (this._starfield) {
+      this._starfield.geometry?.dispose();
+      this._starfield.material?.dispose();
+      this._starfield = null;
     }
 
-    if (this._renderer) {
-      this._renderer.dispose();
-      this._renderer = null;
-    }
+    if (this._coreLight?.parent) this._coreLight.parent.remove(this._coreLight);
+    this._coreLight = null;
 
-    this._scene = null;
-    this._camera = null;
+    if (this._renderer) { this._renderer.dispose(); this._renderer = null; }
+
+    this._scene       = null;
+    this._camera      = null;
     this._sphereGroup = null;
-    this._clipPlane1 = null;
-    this._clipPlane2 = null;
+    this._clipPlane1  = null;
+    this._clipPlane2  = null;
   }
 }

@@ -218,12 +218,14 @@ export class SolarSystemScene {
     this._resizeHandler = this._debounce(() => this._onResize(), 150);
     this._mouseMoveHandler = (e) => this._onMouseMove(e);
     this._clickHandler = (e) => this._onClick(e);
+    this._dblClickHandler = (e) => this._onDblClick(e);
     this._contextLostHandler = (e) => this._onContextLost(e);
     this._contextRestoredHandler = () => this._onContextRestored();
 
     window.addEventListener('resize', this._resizeHandler);
     this.renderer.domElement.addEventListener('mousemove', this._mouseMoveHandler);
     this.renderer.domElement.addEventListener('click', this._clickHandler);
+    this.renderer.domElement.addEventListener('dblclick', this._dblClickHandler);
     this.renderer.domElement.addEventListener('webglcontextlost', this._contextLostHandler);
     this.renderer.domElement.addEventListener('webglcontextrestored', this._contextRestoredHandler);
 
@@ -715,7 +717,9 @@ export class SolarSystemScene {
           moonGroup.rotation.y = mi * 2.1 + Math.random() * Math.PI;
           planetMesh.add(moonGroup);
 
-          const moonRadius = Math.max(0.15, moonData.radius * planetData.displayRadius * 0.4);
+          // Correct ratio: (moonRealRadius / planetRealRadius) * planetDisplayRadius
+          // preserves the true physical size relationship between moon and parent planet.
+          const moonRadius = Math.max(0.12, (moonData.radius / planetData.radius) * planetData.displayRadius);
           let moonTexture;
           // Use photo-realistic texture for Earth's Moon (Luna)
           if (key === 'earth' && mi === 0 && this.textures.moon) {
@@ -984,7 +988,7 @@ export class SolarSystemScene {
           moonGroup.rotation.y = mi * 2.1 + Math.random() * Math.PI;
           planetMesh.add(moonGroup);
 
-          const moonRadius = Math.max(0.12, moonData.radius * planetData.displayRadius * 0.4);
+          const moonRadius = Math.max(0.12, (moonData.radius / planetData.radius) * planetData.displayRadius);
           const moonCanvas = generateMoonTexture(256, 5000 + idx * 100 + mi);
           const moonTexture = new THREE.CanvasTexture(moonCanvas);
           const moonGeo = new THREE.SphereGeometry(moonRadius, 16, 16);
@@ -1433,6 +1437,15 @@ export class SolarSystemScene {
       }
     }
 
+    // Check ISS first — it's a Group so needs recursive raycasting
+    if (this.issTracker && this.issTracker.issMesh && this.issTracker.issMesh.visible) {
+      const issHits = this.raycaster.intersectObject(this.issTracker.issMesh, true);
+      if (issHits.length > 0) {
+        if (this.onISSClick) this.onISSClick();
+        return;
+      }
+    }
+
     const intersects = this.raycaster.intersectObjects(clickable, false);
 
     if (intersects.length > 0) {
@@ -1445,6 +1458,55 @@ export class SolarSystemScene {
       }
     }
   }
+
+  /** Double-click: if a planet is hit focus on it; otherwise pivot orbit around clicked point */
+  _onDblClick(event) {
+    if (this.selectedPlanet || this.isTransitioning) return;
+
+    this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+
+    // Collect planet meshes only
+    const clickable = [];
+    for (const key of PLANET_ORDER) {
+      if (this.planets[key]) clickable.push(this.planets[key].mesh);
+    }
+    for (const key of DWARF_PLANET_ORDER) {
+      if (this.dwarfPlanets[key]) clickable.push(this.dwarfPlanets[key].mesh);
+    }
+
+    const intersects = this.raycaster.intersectObjects(clickable, false);
+    if (intersects.length > 0) {
+      const hit = intersects[0].object;
+      if (hit.userData.type === 'planet') {
+        this.focusOnPlanet(hit.userData.key);
+        if (this.onPlanetClick) this.onPlanetClick(hit.userData.key);
+      }
+    } else {
+      // Empty space double-click: set orbit pivot to the clicked world point
+      const ray = this.raycaster.ray;
+      // Project onto horizontal plane y=0 for natural pivot
+      if (Math.abs(ray.direction.y) > 0.001) {
+        const t2 = -ray.origin.y / ray.direction.y;
+        if (t2 > 0 && t2 < 500) {
+          const worldPoint = ray.origin.clone().addScaledVector(ray.direction, t2);
+          worldPoint.y = 0;
+          this.startLookAt.copy(this.controls.target);
+          this.targetLookAt = worldPoint;
+          this.startCameraPos.copy(this.camera.position);
+          this.targetCameraPos = this.camera.position.clone();
+          this.transitionDuration = 0.5;
+          this.transitionMidPoint = null;
+          this._bezierCP1 = null;
+          this._bezierCP2 = null;
+          this.isTransitioning = true;
+          this.transitionProgress = 0;
+        }
+      }
+    }
+  }
+
 
   /** Raycast for hover — skipped if mouse didn't move enough */
   _checkHover() {
@@ -1754,6 +1816,12 @@ export class SolarSystemScene {
     } else if (this.selectedPlanet && !this.isTransitioning) {
       const currentPos = this.getPlanetWorldPosition(this.selectedPlanet);
       this.controls.target.lerp(currentPos, 0.05);
+    } else if (!this.isTransitioning) {
+      // Smart pan: orbit centre drifts with camera so the Sun is not permanently locked
+      const dir = new THREE.Vector3();
+      this.camera.getWorldDirection(dir);
+      const newTarget = this.camera.position.clone().addScaledVector(dir, 60);
+      this.controls.target.lerp(newTarget, 0.015);
     }
 
     // Hover check
