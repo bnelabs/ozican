@@ -431,9 +431,8 @@ export class CrossSectionViewer {
     this._camStart = new THREE.Vector3(2.5, 1.0, 5.0);
     this._camEnd   = new THREE.Vector3(0.8, 0.6, 2.5);
 
-    // SVG connector overlay
-    this._connectorSvg    = document.getElementById('cs-connectors');
-    this._connectorsBuilt = false;
+    // Numbered layer badges
+    this._badges = [];
 
     // State
     this._disposed         = true;
@@ -487,8 +486,7 @@ export class CrossSectionViewer {
       return;
     }
 
-    this._disposed        = false;
-    this._connectorsBuilt = false;
+    this._disposed = false;
     this._buildScene(layers);
     this._startTime     = performance.now();
     this._lastFrameTime = this._startTime;
@@ -530,8 +528,9 @@ export class CrossSectionViewer {
     this._rowEls = [];
     this._activeLayerIndex = -1;
 
-    if (this._connectorSvg) this._connectorSvg.innerHTML = '';
-    this._connectorsBuilt = false;
+    // Remove all badge elements
+    for (const b of this._badges) b.remove();
+    this._badges = [];
 
     if (this._focusTrap)   { this._focusTrap.release();   this._focusTrap = null; }
     if (this._swipeHandle) { this._swipeHandle.release();  this._swipeHandle = null; }
@@ -549,7 +548,8 @@ export class CrossSectionViewer {
 
   _buildScene(layers) {
     const w = this._canvas.clientWidth  || Math.round(window.innerWidth  * 0.6);
-    const h = this._canvas.clientHeight || Math.max(window.innerHeight, 400);
+    let h = this._canvas.clientHeight || Math.max(window.innerHeight, 400);
+    h = Math.min(h, window.innerHeight - 60);
 
     this._renderer = new THREE.WebGLRenderer({
       canvas: this._canvas, antialias: true, alpha: true,
@@ -762,9 +762,14 @@ export class CrossSectionViewer {
       this._camera.lookAt(0, -0.05, 0);
     }
 
-    // ── Build SVG leader lines once after camera + cut have settled ──
-    if (!this._connectorsBuilt && elapsed > 2.9) {
-      this._buildConnectors();
+    // ── Build numbered badges once after camera + cut have settled ──
+    if (this._badges.length === 0 && elapsed > 2.7 && this._currentLayers) {
+      this._buildBadges();
+    }
+
+    // ── Update badge positions every frame ──
+    if (this._badges.length > 0 && this._renderer && this._camera) {
+      this._updateBadgePositions();
     }
 
     if (this._renderer && this._scene && this._camera) {
@@ -833,99 +838,81 @@ export class CrossSectionViewer {
     });
   }
 
-  // ─── SVG leader lines ────────────────────────────────────────────────────────
+  // ─── Numbered layer badges ────────────────────────────────────────────────────
 
   /**
-   * Projects each layer's ring-edge to screen coords and draws dashed SVG lines
-   * from the sphere cut face to the corresponding sidebar row dot.
-   * Called once when elapsed > 2.9 s, and again after resize.
+   * Creates one absolutely-positioned badge per layer, placed inside #cs-body
+   * (which is position:relative). Badges are numbered 1-N from outermost to
+   * innermost and colored to match the layer. Positions are updated each frame
+   * by _updateBadgePositions().
    */
-  _buildConnectors() {
-    if (this._connectorsBuilt) return;
-    if (!this._connectorSvg || !this._camera || !this._currentLayers) return;
-    if (!this._rowEls.length || !this._canvas) return;
-
+  _buildBadges() {
+    if (!this._camera || !this._currentLayers || !this._canvas) return;
     const bodyEl = this._overlay.querySelector('#cs-body');
     if (!bodyEl) return;
 
-    this._connectorsBuilt = true;
-    const svg = this._connectorSvg;
-    svg.innerHTML = '';
+    // Remove any stale badges first
+    for (const b of this._badges) b.remove();
+    this._badges = [];
 
-    const bodyRect   = bodyEl.getBoundingClientRect();
+    for (let i = 0; i < this._currentLayers.length; i++) {
+      const layer = this._currentLayers[i];
+      const n = i + 1;
+
+      const badge = document.createElement('div');
+      badge.className = 'cs-badge';
+      badge.dataset.layer = String(n);
+      badge.textContent = String(n);
+      badge.style.setProperty('--c', layer.color);
+      bodyEl.appendChild(badge);
+      this._badges.push(badge);
+
+      // Make visible after a short stagger
+      setTimeout(() => badge.classList.add('visible'), 80 + i * 40);
+    }
+
+    // Set initial positions immediately
+    this._updateBadgePositions();
+  }
+
+  /**
+   * Projects each ring's top-edge world position to canvas pixel coords and
+   * repositions the badge div. Called every animation frame after badges exist.
+   */
+  _updateBadgePositions() {
+    if (!this._camera || !this._currentLayers || !this._canvas) return;
+    const bodyEl = this._overlay.querySelector('#cs-body');
+    if (!bodyEl) return;
+
     const canvasRect = this._canvas.getBoundingClientRect();
-    if (bodyRect.width === 0 || bodyRect.height === 0) return;
-
-    // SVG coordinate space = #cs-body bounding rect
-    svg.setAttribute('viewBox', `0 0 ${bodyRect.width} ${bodyRect.height}`);
+    const bodyRect   = bodyEl.getBoundingClientRect();
+    if (canvasRect.width === 0 || canvasRect.height === 0) return;
 
     const maxR   = this._currentLayers[0].r;
     const tmpVec = new THREE.Vector3();
 
-    for (let i = 0; i < this._currentLayers.length; i++) {
-      const layer  = this._currentLayers[i];
-      const rowEl  = this._rowEls[i];
-      if (!rowEl) continue;
+    for (let i = 0; i < this._badges.length; i++) {
+      const layer = this._currentLayers[i];
+      if (!layer) continue;
 
-      const r = layer.r / maxR; // normalised sphere radius for this layer
+      const r = layer.r / maxR;
 
-      // Find the rightmost-in-screen-space point on the ring (in the cut face YZ plane).
-      // Sample 24 angles; the ring is at (0, r·sin(a), r·cos(a)) for angle a.
-      let bestNdcX = -Infinity;
-      let anchorSX = 0, anchorSY = 0;
-      for (let a = 0; a < 24; a++) {
-        const ang = (a / 24) * Math.PI * 2;
-        tmpVec.set(0.006, r * Math.sin(ang), r * Math.cos(ang));
-        const ndc = tmpVec.clone().project(this._camera);
-        const sx  = (ndc.x * 0.5 + 0.5) * canvasRect.width;
-        if (sx > bestNdcX) {
-          bestNdcX  = sx;
-          anchorSX  = sx;
-          anchorSY  = (-ndc.y * 0.5 + 0.5) * canvasRect.height;
-        }
-      }
+      // Project the topmost visible point of the ring (at x=0.006, y=r, z=0)
+      // onto the screen. This is the "12 o'clock" position of the boundary ring.
+      tmpVec.set(0.006, r, 0);
+      const ndc = tmpVec.clone().project(this._camera);
 
-      // Convert canvas-local coords to #cs-body coords
-      const aX = anchorSX + (canvasRect.left - bodyRect.left);
-      const aY = anchorSY + (canvasRect.top  - bodyRect.top);
+      // Convert NDC → canvas-local pixels
+      const sx = (ndc.x *  0.5 + 0.5) * canvasRect.width;
+      const sy = (ndc.y * -0.5 + 0.5) * canvasRect.height;
 
-      // Target: the colored dot in the sidebar row
-      const dotEl   = rowEl.querySelector('.cs-layer-dot');
-      const dotRect = dotEl ? dotEl.getBoundingClientRect() : rowEl.getBoundingClientRect();
-      const tX = dotRect.left + dotRect.width  * 0.5 - bodyRect.left;
-      const tY = dotRect.top  + dotRect.height * 0.5 - bodyRect.top;
+      // Convert to #cs-body-relative coords (badge container)
+      const bx = sx + (canvasRect.left - bodyRect.left);
+      const by = sy + (canvasRect.top  - bodyRect.top);
 
-      // Leader line: dashed, in the layer's color
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('x1', aX.toFixed(1));
-      line.setAttribute('y1', aY.toFixed(1));
-      line.setAttribute('x2', tX.toFixed(1));
-      line.setAttribute('y2', tY.toFixed(1));
-      line.setAttribute('stroke', layer.color);
-      line.setAttribute('stroke-width', '1.5');
-      line.setAttribute('stroke-opacity', '0.60');
-      line.setAttribute('stroke-dasharray', '5,3');
-      svg.appendChild(line);
-
-      // Anchor dot on the sphere face
-      const aDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      aDot.setAttribute('cx', aX.toFixed(1));
-      aDot.setAttribute('cy', aY.toFixed(1));
-      aDot.setAttribute('r', '3.5');
-      aDot.setAttribute('fill', layer.color);
-      aDot.setAttribute('fill-opacity', '0.85');
-      svg.appendChild(aDot);
-
-      // Small circle at the sidebar dot end for a clean termination
-      const tDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      tDot.setAttribute('cx', tX.toFixed(1));
-      tDot.setAttribute('cy', tY.toFixed(1));
-      tDot.setAttribute('r', '2.5');
-      tDot.setAttribute('fill', 'none');
-      tDot.setAttribute('stroke', layer.color);
-      tDot.setAttribute('stroke-width', '1.5');
-      tDot.setAttribute('stroke-opacity', '0.70');
-      svg.appendChild(tDot);
+      // Centre the 22×22 badge on the projected point
+      this._badges[i].style.left = `${(bx - 11).toFixed(1)}px`;
+      this._badges[i].style.top  = `${(by - 11).toFixed(1)}px`;
     }
   }
 
@@ -938,11 +925,18 @@ export class CrossSectionViewer {
 
     for (let i = 0; i < layers.length; i++) {
       const layer = layers[i];
+      const n     = i + 1;
 
       const row = document.createElement('button');
       row.className = 'cs-layer-row';
       row.type      = 'button';
       row.setAttribute('aria-label', t(layer.key));
+
+      // Numbered badge prefix matching the 3D overlay badge
+      const num = document.createElement('span');
+      num.className = 'cs-layer-num';
+      num.textContent = String(n);
+      num.style.cssText = `background:color-mix(in srgb,${layer.color} 20%,transparent);border:1.5px solid ${layer.color};color:${layer.color};`;
 
       const dot = document.createElement('span');
       dot.className = 'cs-layer-dot';
@@ -964,10 +958,15 @@ export class CrossSectionViewer {
       stat.textContent = layer.thickness ? t(layer.thickness) : (layer.temperatureRange ? t(layer.temperatureRange) : '');
 
       text.append(name, comp, stat);
-      row.append(dot, text);
+      row.append(num, dot, text);
 
       const idx = i;
       row.addEventListener('click', () => this._onLayerClick(idx));
+
+      // Hover: pulse matching badge + boost ring emissive
+      row.addEventListener('mouseenter', () => this._onRowHover(idx, true));
+      row.addEventListener('mouseleave', () => this._onRowHover(idx, false));
+
       this._sidebarList.appendChild(row);
       this._rowEls.push(row);
     }
@@ -1013,6 +1012,26 @@ export class CrossSectionViewer {
 
     this._highlightLayer(index);
     this._showDetailPanel(this._currentLayers[index]);
+  }
+
+  _onRowHover(index, entering) {
+    // Pulse the matching badge
+    const badge = this._badges[index];
+    if (badge) {
+      if (entering) {
+        badge.classList.remove('pulse');
+        // Force reflow so re-adding the class restarts the animation
+        void badge.offsetWidth;
+        badge.classList.add('pulse');
+      } else {
+        badge.classList.remove('pulse');
+      }
+    }
+    // Boost emissive of the matching boundary ring
+    const ring = this._boundaryRings[index];
+    if (ring) {
+      ring.material.opacity = entering ? 1.0 : 0.85;
+    }
   }
 
   _highlightLayer(index) {
@@ -1121,13 +1140,7 @@ export class CrossSectionViewer {
     this._renderer.setSize(w, h);
     this._camera.aspect = w / h;
     this._camera.updateProjectionMatrix();
-
-    // Rebuild connectors for new dimensions (only if they were already built)
-    if (this._connectorsBuilt) {
-      this._connectorsBuilt = false;
-      // Defer one frame so the layout reflow completes first
-      requestAnimationFrame(() => this._buildConnectors());
-    }
+    // Badge positions update automatically each frame via _updateBadgePositions()
   }
 
   // ─── Utilities ───────────────────────────────────────────────────────────────

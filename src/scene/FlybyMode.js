@@ -42,11 +42,12 @@ export class FlybyMode {
     this._savedFOV      = 60;
     this._savedControls = false;
 
-    this._hudEl     = null;
-    this._pauseBtn  = null;
-    this._repeatBtn = null;
-    this._exitBtn   = null;
-    this._elapsedEl = null;
+    this._hudEl       = null;
+    this._pauseBtn    = null;
+    this._repeatBtn   = null;
+    this._exitBtn     = null;
+    this._elapsedEl   = null;
+    this._langListener = null;
 
     // Scratch quaternion for orientation
     this._q = new THREE.Quaternion();
@@ -125,15 +126,13 @@ export class FlybyMode {
     if (this._elapsed >= TOTAL_DURATION) this._onEnd();
   }
 
-  pause()       { this._paused = true;  if (this._pauseBtn) this._pauseBtn.textContent = t('flyby.resume') || 'Resume'; }
-  resume()      { this._paused = false; if (this._pauseBtn) this._pauseBtn.textContent = t('flyby.pause')  || 'Pause';  }
+  pause()       { this._paused = true; }
+  resume()      { this._paused = false; }
   togglePause() { if (this._paused) this.resume(); else this.pause(); }
 
   repeat() {
     this._elapsed = 0;
     this._paused  = false;
-    if (this._pauseBtn)  this._pauseBtn.textContent  = t('flyby.pause')  || 'Pause';
-    if (this._repeatBtn) this._repeatBtn.style.opacity = '0.5';
   }
 
   exit() {
@@ -396,23 +395,22 @@ export class FlybyMode {
     this._hudEl.classList.remove('hidden');
     this._hudEl.setAttribute('aria-hidden', 'false');
 
-    this._pauseBtn  = this._hudEl.querySelector('#flyby-pause');
-    this._repeatBtn = this._hudEl.querySelector('#flyby-repeat');
     this._exitBtn   = this._hudEl.querySelector('#flyby-exit');
     this._elapsedEl = this._hudEl.querySelector('#flyby-elapsed');
 
-    if (this._pauseBtn) {
-      this._pauseBtn.textContent = t('flyby.pause') || 'Pause';
-      this._pauseBtn.onclick = () => this.togglePause();
-    }
-    if (this._repeatBtn) {
-      this._repeatBtn.textContent   = t('flyby.repeat') || 'Repeat';
-      this._repeatBtn.style.opacity = '0.5';
-      this._repeatBtn.onclick = () => this.repeat();
-    }
     if (this._exitBtn) {
-      this._exitBtn.textContent = t('flyby.exit') || 'Exit Flyby';
       this._exitBtn.onclick = () => this.exit();
+    }
+
+    this._refreshHUDLabels();
+
+    this._langListener = () => this._refreshHUDLabels();
+    window.addEventListener('langchange', this._langListener);
+  }
+
+  _refreshHUDLabels() {
+    if (this._exitBtn) {
+      this._exitBtn.textContent = t('flyby.exit') || 'Exit';
     }
   }
 
@@ -431,7 +429,6 @@ export class FlybyMode {
   // ─── Lifecycle ───────────────────────────────────────────────────────────
 
   _onEnd() {
-    if (this._repeatBtn) this._repeatBtn.style.opacity = '1';
     this._paused = true;
     setTimeout(() => { if (this._active) this.exit(); }, 4000);
   }
@@ -465,6 +462,10 @@ export class FlybyMode {
     this._hideHUD();
     this._showLetterbox(false);
     document.removeEventListener('keydown', this._boundKeydown);
+    if (this._langListener) {
+      window.removeEventListener('langchange', this._langListener);
+      this._langListener = null;
+    }
     this._bodyKey = null;
     this._spline  = null;
   }

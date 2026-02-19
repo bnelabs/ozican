@@ -100,6 +100,26 @@ export const ui_en = {
   'onboarding.next': 'Next',
   'onboarding.done': 'Done',
 
+  // Help modal
+  'help.title': 'Help',
+  'help.navTitle': 'Navigation',
+  'help.nav1': 'Click a planet to select it and view details',
+  'help.nav2': 'Scroll or pinch to zoom in / out',
+  'help.nav3': 'Click and drag to rotate the view',
+  'help.nav4': 'Double-click a planet to fly to it',
+  'help.featuresTitle': 'Features',
+  'help.feat1': 'Click 🔬 to view a planet\'s internal cross-section',
+  'help.feat2': 'Click 🚀 to launch a flyby of the selected planet',
+  'help.feat3': 'Click ⚖️ to compare two planets side by side',
+  'help.feat4': 'Click 🎵 to control background music',
+  'help.feat5': 'Click 🌍 to change language',
+  'help.feat6': 'Click ⛶ for fullscreen mode',
+  'help.shortcutsTitle': 'Keyboard Shortcuts',
+  'help.kbSpace': 'Pause / resume animation',
+  'help.kbEsc': 'Close panels / deselect',
+  'help.kbHelp': 'Toggle help panel',
+  'help.kbFullscreen': 'Toggle fullscreen',
+
   // Keyboard help
   'keyboard.title': 'Keyboard Shortcuts',
   'keyboard.selectPlanet': 'Select planet',
@@ -231,6 +251,7 @@ export const ui_en = {
   'aria.recenter': 'Re-centre on Sun',
 
   // Flyby mode
+  'flyby.title': 'Flyby',
   'flyby.start': '🚀 Flyby',
   'flyby.pause': 'Pause',
   'flyby.resume': 'Resume',

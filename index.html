@@ -338,11 +338,8 @@
   <!-- Flyby HUD overlay -->
   <div id="flyby-hud" class="hidden" role="dialog" aria-label="Flyby Controls" aria-hidden="true">
     <div class="flyby-hud-inner">
-      <div class="flyby-hud-title">🚀 Flyby</div>
-      <div class="flyby-hud-timer"><span id="flyby-elapsed">25.0s</span></div>
+      <div class="flyby-hud-timer">⏱ <span id="flyby-elapsed">25.0s</span></div>
       <div class="flyby-hud-controls">
-        <button id="flyby-pause" class="flyby-ctrl-btn" aria-label="Pause flyby" data-i18n="flyby.pause">Pause</button>
-        <button id="flyby-repeat" class="flyby-ctrl-btn" aria-label="Repeat flyby" data-i18n="flyby.repeat">Repeat</button>
         <button id="flyby-exit" class="flyby-ctrl-btn flyby-exit-btn" aria-label="Exit flyby" data-i18n="flyby.exit">Exit</button>
       </div>
     </div>
@@ -356,6 +353,47 @@
 
   <!-- Persistent help/tutorial button -->
   <button id="btn-help" class="help-btn" title="Restart tutorial" aria-label="Restart tutorial">?</button>
+
+  <!-- Help Modal -->
+  <div id="help-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <div class="help-modal">
+      <div class="help-header">
+        <h2 id="help-title" data-i18n="help.title">Help</h2>
+        <button class="help-close" id="btn-help-close" aria-label="Close help">✕</button>
+      </div>
+      <div class="help-content">
+        <section class="help-section">
+          <h3 data-i18n="help.navTitle">Navigation</h3>
+          <ul>
+            <li data-i18n="help.nav1">Click a planet to select it and view details</li>
+            <li data-i18n="help.nav2">Scroll or pinch to zoom in/out</li>
+            <li data-i18n="help.nav3">Click and drag to rotate the view</li>
+            <li data-i18n="help.nav4">Double-click a planet to fly to it</li>
+          </ul>
+        </section>
+        <section class="help-section">
+          <h3 data-i18n="help.featuresTitle">Features</h3>
+          <ul>
+            <li data-i18n="help.feat1">Click 🔬 to view a planet's internal cross-section</li>
+            <li data-i18n="help.feat2">Click 🚀 to launch a flyby of the selected planet</li>
+            <li data-i18n="help.feat3">Click ⚖️ to compare two planets side by side</li>
+            <li data-i18n="help.feat4">Click 🎵 to control background music</li>
+            <li data-i18n="help.feat5">Click 🌍 to change language</li>
+            <li data-i18n="help.feat6">Click ⛶ for fullscreen mode</li>
+          </ul>
+        </section>
+        <section class="help-section">
+          <h3 data-i18n="help.shortcutsTitle">Keyboard Shortcuts</h3>
+          <ul>
+            <li><kbd>Space</kbd> <span data-i18n="help.kbSpace">Pause / resume animation</span></li>
+            <li><kbd>Esc</kbd> <span data-i18n="help.kbEsc">Close panels / deselect</span></li>
+            <li><kbd>?</kbd> <span data-i18n="help.kbHelp">Toggle this help panel</span></li>
+            <li><kbd>F</kbd> <span data-i18n="help.kbFullscreen">Toggle fullscreen</span></li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="/src/main.js"></script>
 </body>

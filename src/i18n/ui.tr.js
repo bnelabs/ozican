@@ -100,6 +100,26 @@ export const ui_tr = {
   'onboarding.next': 'İleri',
   'onboarding.done': 'Tamam',
 
+  // Help modal
+  'help.title': 'Yardım',
+  'help.navTitle': 'Navigasyon',
+  'help.nav1': 'Bir gezegeni seçmek ve detayları görmek için tıklayın',
+  'help.nav2': 'Yakınlaştırmak/uzaklaştırmak için kaydırın veya sıkıştırın',
+  'help.nav3': 'Görünümü döndürmek için tıklayıp sürükleyin',
+  'help.nav4': 'Bir gezegene uçmak için çift tıklayın',
+  'help.featuresTitle': 'Özellikler',
+  'help.feat1': 'Gezegenin iç kesitini görmek için 🔬 tıklayın',
+  'help.feat2': 'Seçili gezegenin yanından uçuş başlatmak için 🚀 tıklayın',
+  'help.feat3': 'İki gezegeni yan yana karşılaştırmak için ⚖️ tıklayın',
+  'help.feat4': 'Arka plan müziğini kontrol etmek için 🎵 tıklayın',
+  'help.feat5': 'Dili değiştirmek için 🌍 tıklayın',
+  'help.feat6': 'Tam ekran için ⛶ tıklayın',
+  'help.shortcutsTitle': 'Klavye Kısayolları',
+  'help.kbSpace': 'Animasyonu durdur / devam ettir',
+  'help.kbEsc': 'Panelleri kapat / seçimi kaldır',
+  'help.kbHelp': 'Yardım panelini aç/kapat',
+  'help.kbFullscreen': 'Tam ekranı aç/kapat',
+
   // Keyboard help
   'keyboard.title': 'Klavye Kısayolları',
   'keyboard.selectPlanet': 'Gezegen seç',
@@ -231,6 +251,7 @@ export const ui_tr = {
   'aria.recenter': "Güneş'te Merkeze Al",
 
   // Flyby modu
+  'flyby.title': 'Uçuş',
   'flyby.start': '🚀 Geçiş Uçuşu',
   'flyby.pause': 'Duraklat',
   'flyby.resume': 'Devam Et',

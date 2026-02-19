@@ -34,8 +34,8 @@ class AudioManager {
     this.loaded = false;
     this.playing = false;
 
-    // Restore persisted state — default to unmuted so music auto-plays
-    this.muted = storageGet(STORAGE_KEY) === 'true'; // false by default (including when null)
+    // Restore persisted state — default to muted on first visit (storage returns null)
+    this.muted = storageGet(STORAGE_KEY) !== 'false';
 
     const storedVolume = storageGet(VOLUME_KEY);
     this._volume = storedVolume !== null ? parseFloat(storedVolume) : 0.3;
@@ -158,6 +158,7 @@ class AudioManager {
   /** Equal-power crossfade between current and target track — lazy-loads if needed */
   async crossfadeTo(trackId, duration) {
     if (!this.loaded) return;
+    if (this.ctx && this.ctx.state === 'suspended') await this.ctx.resume();
     if (!this.tracks.has(trackId)) {
       await this._loadTrack(trackId);
       if (!this.tracks.has(trackId)) return;

@@ -126,6 +126,7 @@ const _focusTraps = {
   mission: null,
   quiz: null,
   music: null,
+  help: null,
 };
 
 function _activateTrap(key, el) {
@@ -478,9 +479,35 @@ function startApp() {
     audioManager.setContext(currentPlanetKey ? 'planet' : 'overview');
   });
 
-  // Help/tutorial restart button
+  // Help button — opens the help modal
+  const helpOverlayEl = document.getElementById('help-overlay');
+  const btnHelpClose = document.getElementById('btn-help-close');
+
+  function openHelpModal() {
+    if (!helpOverlayEl) return;
+    helpOverlayEl.classList.remove('hidden');
+    _activateTrap('help', helpOverlayEl);
+    announce(t('help.title') || 'Help');
+  }
+
+  function closeHelpModal() {
+    if (!helpOverlayEl) return;
+    helpOverlayEl.classList.add('hidden');
+    _releaseTrap('help');
+  }
+
   if (btnHelp) {
-    btnHelp.addEventListener('click', () => restartOnboarding());
+    btnHelp.addEventListener('click', openHelpModal);
+  }
+
+  if (btnHelpClose) {
+    btnHelpClose.addEventListener('click', closeHelpModal);
+  }
+
+  if (helpOverlayEl) {
+    helpOverlayEl.addEventListener('click', (e) => {
+      if (e.target === helpOverlayEl) closeHelpModal();
+    });
   }
 
   // Wire scene callbacks
@@ -1993,14 +2020,29 @@ function toggleKeyboardHelp() {
 }
 
 document.addEventListener('keydown', (e) => {
-  // Keyboard help
+  // Toggle help modal with '?'
   if (e.key === '?') {
-    toggleKeyboardHelp();
+    const helpOverlayEl = document.getElementById('help-overlay');
+    if (helpOverlayEl && !helpOverlayEl.classList.contains('hidden')) {
+      const btnHelpClose = document.getElementById('btn-help-close');
+      if (btnHelpClose) btnHelpClose.click();
+    } else {
+      const btnHelp = document.getElementById('btn-help');
+      if (btnHelp) btnHelp.click();
+    }
     return;
   }
 
   if (e.key === 'Escape') {
-    // Close keyboard help first if visible
+    // Close help modal first if visible
+    const helpOverlayEl = document.getElementById('help-overlay');
+    if (helpOverlayEl && !helpOverlayEl.classList.contains('hidden')) {
+      const btnHelpClose = document.getElementById('btn-help-close');
+      if (btnHelpClose) btnHelpClose.click();
+      return;
+    }
+
+    // Close keyboard help if visible (legacy overlay)
     const helpOverlay = document.getElementById('keyboard-help-overlay');
     if (helpOverlay) {
       helpOverlay.remove();

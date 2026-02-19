@@ -81,6 +81,25 @@ export class ISSTracker {
     rightPanel.position.x = bodySize * 1.5;
     group.add(rightPanel);
 
+    // Invisible hit-test sphere to make the ISS easier to click
+    const hitGeo = new THREE.SphereGeometry(bodySize * 4, 6, 6);
+    const hitMat = new THREE.MeshBasicMaterial({ visible: false });
+    const hitMesh = new THREE.Mesh(hitGeo, hitMat);
+    group.add(hitMesh);
+
+    // Pulsing teal glow sprite for visibility
+    const glowMat = new THREE.SpriteMaterial({
+      color: 0x00ffcc,
+      transparent: true,
+      opacity: 0.7,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const glowSprite = new THREE.Sprite(glowMat);
+    glowSprite.scale.setScalar(bodySize * 3);
+    group.add(glowSprite);
+    this.glowSprite = glowSprite;
+
     // Position the ISS at the orbit radius along the x-axis;
     // the parent orbitGroup's rotation animates the orbital motion.
     group.position.x = orbitRadius;
@@ -135,7 +154,7 @@ export class ISSTracker {
       const earthWorldPos = new THREE.Vector3();
       this.earthMesh.getWorldPosition(earthWorldPos);
       const dist = camera.position.distanceTo(earthWorldPos);
-      const shouldShow = dist < 20;
+      const shouldShow = dist < 50;
       if (this.issMesh) this.issMesh.visible = shouldShow && this._visible;
       if (this.orbitLine) this.orbitLine.visible = shouldShow && this._visible;
     }
@@ -146,6 +165,11 @@ export class ISSTracker {
     // This means the ISS completes ~15.5 orbits per simulated Earth day — matching reality.
     if (this.orbitGroup) {
       this.orbitGroup.rotation.y += delta * 0.1555;
+    }
+
+    // --- Pulsing glow opacity ---
+    if (this.glowSprite) {
+      this.glowSprite.material.opacity = 0.4 + 0.3 * Math.sin(Date.now() * 0.003);
     }
   }
 

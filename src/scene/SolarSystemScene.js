@@ -396,14 +396,10 @@ export class SolarSystemScene {
     this.corona = new THREE.Mesh(coronaGeo, coronaMat);
     this.scene.add(this.corona);
 
-    // Volumetric corona shells — 6 concentric spheres with noise-driven streamers
+    // Volumetric corona shells — 2 concentric spheres with noise-driven streamers
     const shellConfigs = [
       { scale: 1.3, opacity: 0.18, color: new THREE.Color(1.0, 0.82, 0.35) },
-      { scale: 1.6, opacity: 0.12, color: new THREE.Color(1.0, 0.72, 0.25) },
-      { scale: 2.2, opacity: 0.07, color: new THREE.Color(1.0, 0.58, 0.15) },
-      { scale: 3.2, opacity: 0.035, color: new THREE.Color(1.0, 0.45, 0.08) },
-      { scale: 5.0, opacity: 0.015, color: new THREE.Color(1.0, 0.35, 0.05) },
-      { scale: 8.0, opacity: 0.005, color: new THREE.Color(1.0, 0.25, 0.02) },
+      { scale: 1.6, opacity: 0.08, color: new THREE.Color(1.0, 0.72, 0.25) },
     ];
     this.coronaShells = [];
     for (const cfg of shellConfigs) {
@@ -928,6 +924,12 @@ export class SolarSystemScene {
         dashSize: 0.8,
         gapSize: 0.4,
       });
+
+      if (['mercury', 'venus'].includes(key)) {
+        orbitMat.dashSize = 3.0;
+        orbitMat.gapSize  = 0.2;
+        orbitMat.opacity  = 0.07;
+      }
 
       const orbitLine = new THREE.Line(orbitGeo, orbitMat);
       orbitLine.computeLineDistances();
