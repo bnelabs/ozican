@@ -516,7 +516,7 @@ function startApp() {
   // Play music — AudioContext was already initialized synchronously
   // in endDedication() or lang picker click handler (user gesture context)
   audioManager.init().then(() => {
-    if (!audioManager.playing) {
+    if (!audioManager.playing && !audioManager.isMuted) {
       audioManager.play();
     }
     updateMusicIcon();
