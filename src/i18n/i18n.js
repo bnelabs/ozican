@@ -4,6 +4,7 @@
  */
 import { ui_en } from './ui.en.js';
 import { ui_tr } from './ui.tr.js';
+import { storageGet, storageSet } from '../utils/storage.js';
 
 const STORAGE_KEY = 'ozmos-lang';
 const SUPPORTED = ['en', 'tr'];
@@ -14,8 +15,8 @@ const listeners = [];
 
 /** Initialize language from localStorage or browser preference */
 export function initLang() {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored && SUPPORTED.includes(stored)) {
+  const stored = storageGet(STORAGE_KEY, SUPPORTED, null);
+  if (stored) {
     currentLang = stored;
   } else {
     const browserLang = (navigator.language || '').slice(0, 2).toLowerCase();
@@ -33,7 +34,7 @@ export function getLang() {
 export function setLang(lang) {
   if (!SUPPORTED.includes(lang) || lang === currentLang) return;
   currentLang = lang;
-  localStorage.setItem(STORAGE_KEY, lang);
+  storageSet(STORAGE_KEY, lang);
   document.documentElement.lang = lang;
   listeners.forEach(fn => fn(lang));
 }
@@ -43,6 +44,24 @@ export function t(key) {
   return DICTIONARIES[currentLang]?.[key]
     || DICTIONARIES.en[key]
     || key;
+}
+
+/**
+ * Locale-aware toUpperCase — handles Turkish dotted-i correctly.
+ * @param {string} str
+ * @returns {string}
+ */
+export function toUpper(str) {
+  return str.toLocaleUpperCase(currentLang === 'tr' ? 'tr-TR' : undefined);
+}
+
+/**
+ * Locale-aware toLowerCase — handles Turkish dotless-ı correctly.
+ * @param {string} str
+ * @returns {string}
+ */
+export function toLower(str) {
+  return str.toLocaleLowerCase(currentLang === 'tr' ? 'tr-TR' : undefined);
 }
 
 /** Register a callback for language changes */

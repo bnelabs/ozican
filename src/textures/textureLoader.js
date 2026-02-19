@@ -43,8 +43,52 @@ const TEXTURE_PATHS_MOBILE = {
 
 const TEXTURE_PATHS = isMobile ? TEXTURE_PATHS_MOBILE : TEXTURE_PATHS_DESKTOP;
 
+/** Solid-color fallback canvas texture (1×1 pixel, neutral grey). */
+function makeFallbackTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#444466';
+  ctx.fillRect(0, 0, 1, 1);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/**
+ * Attempt to load a texture, retrying up to maxAttempts times with
+ * exponential backoff (2 s → 4 s → 8 s …).
+ * On final failure returns a 1×1 solid-colour fallback texture.
+ * @param {THREE.TextureLoader} loader
+ * @param {string} url
+ * @param {number} maxAttempts
+ * @returns {Promise<THREE.Texture>}
+ */
+async function loadTextureWithRetry(loader, url, maxAttempts = 3) {
+  let delay = 2000;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const texture = await new Promise((resolve, reject) => {
+        loader.load(url, resolve, undefined, reject);
+      });
+      texture.colorSpace = THREE.SRGBColorSpace;
+      return texture;
+    } catch {
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, delay));
+        delay *= 2;
+      }
+    }
+  }
+  console.warn(`[TextureLoader] Failed to load "${url}" after ${maxAttempts} attempts — using fallback.`);
+  return makeFallbackTexture();
+}
+
 /**
  * Loads all textures and returns a map.
+ * Each texture is retried up to 3 times with exponential backoff before
+ * falling back to a solid-colour placeholder.
  * @param {function} onProgress - Called with (percent) as textures load
  * @returns {Promise<Object>} Map of key -> THREE.Texture
  */
@@ -55,26 +99,10 @@ export async function loadAllTextures(onProgress) {
   let loaded = 0;
   const textures = {};
 
-  const promises = keys.map((key) => {
-    return new Promise((resolve) => {
-      loader.load(
-        TEXTURE_PATHS[key],
-        (texture) => {
-          texture.colorSpace = THREE.SRGBColorSpace;
-          textures[key] = texture;
-          loaded++;
-          if (onProgress) onProgress(Math.round((loaded / total) * 100));
-          resolve();
-        },
-        undefined,
-        () => {
-          // On error, leave texture undefined (fallback to procedural)
-          loaded++;
-          if (onProgress) onProgress(Math.round((loaded / total) * 100));
-          resolve();
-        }
-      );
-    });
+  const promises = keys.map(async (key) => {
+    textures[key] = await loadTextureWithRetry(loader, TEXTURE_PATHS[key]);
+    loaded++;
+    if (onProgress) onProgress(Math.round((loaded / total) * 100));
   });
 
   await Promise.all(promises);

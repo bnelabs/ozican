@@ -3,6 +3,7 @@
  * Shows a 4-step guided tour on first visit.
  */
 import { t } from '../i18n/i18n.js';
+import { storageGet, storageSet } from '../utils/storage.js';
 
 const STORAGE_KEY = 'ozmos-onboarding-done';
 
@@ -43,7 +44,7 @@ function cleanup() {
 
 function finish() {
   cleanup();
-  localStorage.setItem(STORAGE_KEY, 'true');
+  storageSet(STORAGE_KEY, 'true');
 }
 
 function positionTooltip(targetRect) {
@@ -135,7 +136,14 @@ function showStep() {
 }
 
 export function startOnboarding() {
-  if (localStorage.getItem(STORAGE_KEY)) return;
+  if (storageGet(STORAGE_KEY)) return;
+  currentStep = 0;
+  showStep();
+}
+
+/** Force-restart onboarding regardless of localStorage state */
+export function restartOnboarding() {
+  cleanup(); // clean up any existing onboarding UI
   currentStep = 0;
   showStep();
 }

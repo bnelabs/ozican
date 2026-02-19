@@ -232,15 +232,10 @@ export class CutawayRenderer {
     this._faceMaterial1 = null;
     this._faceMaterial2 = null;
 
-    // LOCAL-space clip plane templates (transformed to world space each frame)
-    this._localClip1 = null; // clips +X in local space
-    this._localClip2 = null; // clips +Z in local space
-    this._localSemiZ = null; // semi-circle clip for face 1
-    this._localSemiX = null; // semi-circle clip for face 2
-
-    // Reusable objects to avoid per-frame allocation
-    this._normalMat = new THREE.Matrix3();
-    this._tempPlane = new THREE.Plane();
+    // Reusable vectors for per-frame clip plane computation
+    this._localXWorld = new THREE.Vector3();
+    this._localZWorld = new THREE.Vector3();
+    this._worldPos = new THREE.Vector3();
 
     // Fallback: if no planet mesh provided, use legacy mini-renderer mode
     this._useLegacyMode = !planetMesh;
@@ -256,12 +251,34 @@ export class CutawayRenderer {
     const layers = PLANET_LAYERS[this.planetKey];
     if (!layers) return;
 
+    // A11Y-8: Add visually-hidden layer list for screen readers
+    this._addA11yLayerList(layers);
+
     if (this._useLegacyMode) {
       this._initLegacy(layers);
       return;
     }
 
     this._initOnPlanet(layers);
+  }
+
+  /** Add a screen-reader-only list describing the geological layers */
+  _addA11yLayerList(layers) {
+    const existing = this.container.querySelector('.cutaway-sr-layers');
+    if (existing) existing.remove();
+
+    const srList = document.createElement('ul');
+    srList.className = 'cutaway-sr-layers sr-only';
+    srList.setAttribute('aria-label', t('cutaway.layersLabel') || 'Geological layers from surface to center');
+
+    for (let i = layers.length - 1; i >= 0; i--) {
+      const layer = layers[i];
+      const li = document.createElement('li');
+      li.textContent = layer.label || layer.name || `Layer ${i + 1}`;
+      srList.appendChild(li);
+    }
+
+    this.container.appendChild(srList);
   }
 
   _classifyLayer(key) {

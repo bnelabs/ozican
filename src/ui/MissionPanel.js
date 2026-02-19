@@ -4,6 +4,7 @@
 import { MISSIONS } from '../data/missions.js';
 import { getLang, t } from '../i18n/i18n.js';
 import { getWaypointProgressPositions } from '../scene/OrbitalMechanics.js';
+import { escapeHTML, sanitizeHTML } from '../utils/sanitize.js';
 
 export function renderMissionList() {
   const lang = getLang();
@@ -15,16 +16,16 @@ export function renderMissionList() {
     const isActive = mission.status.startsWith('Active');
 
     html += `
-      <div class="mission-card" data-mission-id="${mission.id}">
+      <div class="mission-card" data-mission-id="${escapeHTML(mission.id)}">
         <div class="mission-card-indicator" style="background: ${mission.color};"></div>
         <div class="mission-card-body">
           <div class="mission-card-header">
-            <h3 class="mission-card-name">${mission.name}</h3>
-            <span class="mission-card-year">${mission.launchDate.slice(0, 4)}</span>
+            <h3 class="mission-card-name">${escapeHTML(mission.name)}</h3>
+            <span class="mission-card-year">${escapeHTML(mission.launchDate.slice(0, 4))}</span>
           </div>
-          <p class="mission-card-desc">${desc}</p>
+          <p class="mission-card-desc">${sanitizeHTML(desc)}</p>
           <div class="mission-card-status ${isActive ? 'active' : 'ended'}">
-            ${status}
+            ${escapeHTML(status)}
           </div>
         </div>
       </div>`;
@@ -44,13 +45,13 @@ export function renderMissionDetail(missionId) {
   // Header
   html += `
     <div class="mission-detail-header">
-      <button class="mission-back-btn" id="mission-back">&larr; ${t('missions.title')}</button>
-      <h2 style="color: ${mission.color};">${mission.name}</h2>
-      <div class="mission-detail-status">${lang === 'tr' ? mission.statusTr : mission.status}</div>
+      <button class="mission-back-btn" id="mission-back">&larr; ${escapeHTML(t('missions.title'))}</button>
+      <h2 style="color: ${mission.color};">${escapeHTML(mission.name)}</h2>
+      <div class="mission-detail-status">${escapeHTML(lang === 'tr' ? mission.statusTr : mission.status)}</div>
     </div>`;
 
   // Description
-  html += `<p class="mission-detail-desc">${lang === 'tr' ? mission.descriptionTr : mission.description}</p>`;
+  html += `<p class="mission-detail-desc">${sanitizeHTML(lang === 'tr' ? mission.descriptionTr : mission.description)}</p>`;
 
   // Timeline
   html += `<div class="mission-timeline">
@@ -63,19 +64,19 @@ export function renderMissionDetail(missionId) {
     const dateStr = date.toLocaleDateString(lang === 'tr' ? 'tr-TR' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 
     html += `
-      <div class="timeline-event" data-waypoint-index="${i}" data-mission-id="${mission.id}">
+      <div class="timeline-event" data-waypoint-index="${i}" data-mission-id="${escapeHTML(mission.id)}">
         <div class="timeline-dot" style="background: ${mission.color};"></div>
         <div class="timeline-line" ${i === mission.waypoints.length - 1 ? 'style="display:none;"' : ''}></div>
         <div class="timeline-content">
-          <div class="timeline-date">${dateStr}</div>
-          <div class="timeline-event-name">${eventText}</div>`;
+          <div class="timeline-date">${escapeHTML(dateStr)}</div>
+          <div class="timeline-event-name">${escapeHTML(eventText)}</div>`;
 
     // Facts
     const facts = lang === 'tr' ? wp.factsTr : wp.facts;
     if (facts && facts.length > 0) {
       html += `<ul class="timeline-facts">`;
       for (const fact of facts) {
-        html += `<li>${fact}</li>`;
+        html += `<li>${sanitizeHTML(fact)}</li>`;
       }
       html += `</ul>`;
     }
@@ -96,7 +97,27 @@ export function renderMissionHUD(missionId) {
   if (!mission) return '';
 
   const lang = getLang();
-  const waypointPositions = getWaypointProgressPositions(missionId);
+
+  // RES-4: Wrap trajectory calculation in try/catch so one bad mission
+  // doesn't block the whole HUD from rendering.
+  let waypointPositions;
+  try {
+    waypointPositions = getWaypointProgressPositions(missionId);
+  } catch (err) {
+    console.warn('[MissionPanel] Trajectory calculation failed, showing text-only view:', err);
+    // Return a graceful fallback with mission info but no interactive scrubber
+    return `
+      <div class="mission-hud" id="mission-hud">
+        <div class="mission-hud-header">
+          <h3 style="color: ${mission.color};">${escapeHTML(mission.name)}</h3>
+          <button class="mission-hud-close" id="mission-hud-close" title="${escapeHTML(t('missions.exitMission') || 'Exit Mission')}">&times;</button>
+        </div>
+        <p class="mission-hud-error">${escapeHTML(lang === 'tr' ? mission.descriptionTr : mission.description)}</p>
+        <div class="mission-controls">
+          <button class="mission-control-btn" id="mission-exit-btn">${escapeHTML(t('missions.exitMission') || 'Exit')}</button>
+        </div>
+      </div>`;
+  }
 
   // Build waypoint dots HTML
   let dotsHtml = '';
@@ -107,18 +128,22 @@ export function renderMissionHUD(missionId) {
     dotsHtml += `<div class="timeline-waypoint-dot"
       style="left: ${pct}%; background: ${mission.color}; color: ${mission.color};"
       data-waypoint-index="${i}"
-      title="${eventText}"></div>`;
+      title="${escapeHTML(eventText)}"></div>`;
   }
 
   return `
     <div class="mission-hud" id="mission-hud">
       <div class="mission-hud-header">
-        <h3 style="color: ${mission.color};">${mission.name}</h3>
-        <span class="mission-hud-date" id="mission-hud-date">${mission.launchDate}</span>
-        <button class="mission-hud-close" id="mission-hud-close" title="${t('missions.exitMission') || 'Exit Mission'}">&times;</button>
+        <h3 style="color: ${mission.color};">${escapeHTML(mission.name)}</h3>
+        <span class="mission-hud-date" id="mission-hud-date">${escapeHTML(mission.launchDate)}</span>
+        <button class="mission-hud-close" id="mission-hud-close" title="${escapeHTML(t('missions.exitMission') || 'Exit Mission')}">&times;</button>
       </div>
       <div class="timeline-scrubber" id="timeline-scrubber">
-        <div class="timeline-track" id="timeline-track">
+        <div class="timeline-track" id="timeline-track"
+          role="slider" tabindex="0"
+          aria-label="${escapeHTML(mission.name)} ${t('missions.timeline') || 'timeline progress'}"
+          aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+          aria-orientation="horizontal">
           <div class="timeline-fill" id="timeline-fill" style="background: ${mission.color}; width: 0%;"></div>
           ${dotsHtml}
           <div class="timeline-playhead" id="timeline-playhead" style="left: 0%;"></div>
@@ -159,15 +184,15 @@ export function renderWaypointCard(missionId, waypointIndex) {
   if (facts && facts.length > 0) {
     factsHtml = `<ul class="waypoint-card-facts">`;
     for (const fact of facts) {
-      factsHtml += `<li>${fact}</li>`;
+      factsHtml += `<li>${sanitizeHTML(fact)}</li>`;
     }
     factsHtml += `</ul>`;
   }
 
   return `
     <div class="waypoint-card" id="waypoint-card" style="border-color: ${mission.color};">
-      <div class="waypoint-card-date">${dateStr}</div>
-      <div class="waypoint-card-event" style="color: ${mission.color};">${eventText}</div>
+      <div class="waypoint-card-date">${escapeHTML(dateStr)}</div>
+      <div class="waypoint-card-event" style="color: ${mission.color};">${escapeHTML(eventText)}</div>
       ${factsHtml}
     </div>`;
 }

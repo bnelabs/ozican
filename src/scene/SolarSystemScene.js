@@ -1,5 +1,19 @@
+// @ts-check
 /**
  * Main 3D scene — builds the solar system with Three.js.
+ *
+ * @typedef {Object} PlanetConfig
+ * @property {string} key
+ * @property {number} radius
+ * @property {number} distance
+ * @property {number} [tilt]
+ * @property {number} [orbitSpeed]
+ * @property {number} [rotationSpeed]
+ * @property {string} [textureKey]
+ * @property {number} [color]
+ * @property {boolean} [hasRings]
+ * @property {boolean} [hasClouds]
+ * @property {Array<Object>} [moons]
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -200,10 +214,18 @@ export class SolarSystemScene {
       this.composer.addPass(bloomPass);
     }
 
-    // Events
-    window.addEventListener('resize', () => this._onResize());
-    this.renderer.domElement.addEventListener('mousemove', (e) => this._onMouseMove(e));
-    this.renderer.domElement.addEventListener('click', (e) => this._onClick(e));
+    // Bind event handlers so we can remove them later
+    this._resizeHandler = this._debounce(() => this._onResize(), 150);
+    this._mouseMoveHandler = (e) => this._onMouseMove(e);
+    this._clickHandler = (e) => this._onClick(e);
+    this._contextLostHandler = (e) => this._onContextLost(e);
+    this._contextRestoredHandler = () => this._onContextRestored();
+
+    window.addEventListener('resize', this._resizeHandler);
+    this.renderer.domElement.addEventListener('mousemove', this._mouseMoveHandler);
+    this.renderer.domElement.addEventListener('click', this._clickHandler);
+    this.renderer.domElement.addEventListener('webglcontextlost', this._contextLostHandler);
+    this.renderer.domElement.addEventListener('webglcontextrestored', this._contextRestoredHandler);
 
     // ISS Tracker on Earth
     const earthPlanet = this.planets.earth;
@@ -217,6 +239,7 @@ export class SolarSystemScene {
     this._startCinematicSweep();
 
     // Start render loop
+    this._animating = true;
     this._animate();
     } catch (err) {
       document.dispatchEvent(new CustomEvent('scene-error', {
@@ -249,7 +272,8 @@ export class SolarSystemScene {
     const count = 12000;
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
-    const sizes = new Float32Array(count);
+    const baseSizes = new Float32Array(count);
+    const seeds = new Float32Array(count); // Per-vertex random seed for shader twinkling
 
     // Star color palette: white, blue-white, yellow, orange-red
     const starColors = [
@@ -261,7 +285,6 @@ export class SolarSystemScene {
     ];
 
     for (let i = 0; i < count; i++) {
-      // Distribute on a sphere at varying distances
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
       const r = 400 + Math.random() * 350;
@@ -276,36 +299,57 @@ export class SolarSystemScene {
       colors[i * 3 + 2] = color[2];
 
       // Power-law size distribution: many small, few bright
-      sizes[i] = 0.3 + Math.pow(Math.random(), 3) * 2.5;
+      baseSizes[i] = 0.3 + Math.pow(Math.random(), 3) * 2.5;
+      seeds[i] = Math.random() * 100.0; // random phase offset per star
     }
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+    geo.setAttribute('baseSize', new THREE.BufferAttribute(baseSizes, 1));
+    geo.setAttribute('seed', new THREE.BufferAttribute(seeds, 1));
 
-    // Create a small circular point texture
-    const starCanvas = document.createElement('canvas');
-    starCanvas.width = 32;
-    starCanvas.height = 32;
-    const sCtx = starCanvas.getContext('2d');
-    const grad = sCtx.createRadialGradient(16, 16, 0, 16, 16, 16);
-    grad.addColorStop(0, 'rgba(255,255,255,1)');
-    grad.addColorStop(0.3, 'rgba(255,255,255,0.6)');
-    grad.addColorStop(1, 'rgba(255,255,255,0)');
-    sCtx.fillStyle = grad;
-    sCtx.fillRect(0, 0, 32, 32);
+    // ShaderMaterial: twinkling computed entirely on GPU via uTime + per-vertex seed
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+      },
+      vertexShader: /* glsl */`
+        attribute float baseSize;
+        attribute float seed;
+        attribute vec3 color;
+        varying vec3 vColor;
+        varying float vAlpha;
+        uniform float uTime;
+        uniform float uPixelRatio;
 
-    const pointTexture = new THREE.CanvasTexture(starCanvas);
+        void main() {
+          vColor = color;
+          // Smooth oscillation: combine two sine waves with the per-vertex seed
+          float twinkle = 0.75 + 0.25 * sin(uTime * 1.5 + seed)
+                                * sin(uTime * 0.7 + seed * 0.3);
+          vAlpha = twinkle;
+          gl_PointSize = baseSize * twinkle * uPixelRatio;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */`
+        varying vec3 vColor;
+        varying float vAlpha;
 
-    const mat = new THREE.PointsMaterial({
-      size: 1.5,
-      sizeAttenuation: true,
-      map: pointTexture,
+        void main() {
+          // Circular soft disc
+          float d = length(gl_PointCoord - vec2(0.5));
+          if (d > 0.5) discard;
+          float alpha = smoothstep(0.5, 0.1, d) * vAlpha;
+          gl_FragColor = vec4(vColor, alpha);
+        }
+      `,
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      vertexColors: true,
+      vertexColors: false, // colors handled via varying in shader
     });
 
     this.particleStars = new THREE.Points(geo, mat);
@@ -1335,8 +1379,20 @@ export class SolarSystemScene {
   }
 
   _onMouseMove(event) {
-    this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    const newX = (event.clientX / window.innerWidth) * 2 - 1;
+    const newY = -(event.clientY / window.innerHeight) * 2 + 1;
+    // Track pixel-space delta to skip raycast when mouse barely moved
+    this._lastMousePxX = this._lastMousePxX ?? event.clientX;
+    this._lastMousePxY = this._lastMousePxY ?? event.clientY;
+    const dx = event.clientX - this._lastMousePxX;
+    const dy = event.clientY - this._lastMousePxY;
+    this._mouseMovedEnough = (dx * dx + dy * dy) >= 4; // 2px threshold squared
+    if (this._mouseMovedEnough) {
+      this._lastMousePxX = event.clientX;
+      this._lastMousePxY = event.clientY;
+    }
+    this.mouse.x = newX;
+    this.mouse.y = newY;
   }
 
   _onClick(event) {
@@ -1390,8 +1446,10 @@ export class SolarSystemScene {
     }
   }
 
-  /** Raycast for hover */
+  /** Raycast for hover — skipped if mouse didn't move enough */
   _checkHover() {
+    if (!this._mouseMovedEnough) return;
+    this._mouseMovedEnough = false;
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
     const clickable = [];
@@ -1483,6 +1541,7 @@ export class SolarSystemScene {
   }
 
   _animate() {
+    if (!this._animating) return;
     requestAnimationFrame(() => this._animate());
 
     const delta = this.clock.getDelta();
@@ -1494,17 +1553,11 @@ export class SolarSystemScene {
       this.starfield.rotation.y += 0.00002 * speed;
     }
 
-    // Particle stars subtle twinkle
+    // Particle stars — twinkling driven by shader uniform (GPU, zero CPU array writes)
     if (this.particleStars) {
       this.particleStars.rotation.y += 0.00001 * speed;
-      const sizes = this.particleStars.geometry.attributes.size;
-      if (sizes && Math.random() < 0.3) {
-        // Twinkle a few random stars per frame
-        for (let i = 0; i < 20; i++) {
-          const idx = Math.floor(Math.random() * sizes.count);
-          sizes.array[idx] = 0.3 + Math.pow(Math.random(), 3) * 2.5;
-        }
-        sizes.needsUpdate = true;
+      if (this.particleStars.material.uniforms) {
+        this.particleStars.material.uniforms.uTime.value = elapsed;
       }
     }
 
@@ -1720,7 +1773,49 @@ export class SolarSystemScene {
     if (this.onFrame) this.onFrame(delta);
   }
 
+  /** Simple debounce helper — returns a debounced version of fn */
+  _debounce(fn, delay) {
+    let timer;
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), delay);
+    };
+  }
+
+  /** Handle WebGL context loss — stop rendering until restored */
+  _onContextLost(event) {
+    event.preventDefault(); // Required to allow context restoration
+    this._animating = false;
+
+    // Show a recovery UI overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'webgl-recovery-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);color:#fff;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:sans-serif;font-size:1.1rem;text-align:center;';
+    overlay.innerHTML = '<div><p>⚠ Graphics context lost.</p><p>Attempting to recover…</p></div>';
+    document.body.appendChild(overlay);
+  }
+
+  /** Handle WebGL context restoration — reinitialize and restart loop */
+  _onContextRestored() {
+    const overlay = document.getElementById('webgl-recovery-overlay');
+    if (overlay) overlay.remove();
+
+    // Re-upload textures and restart the loop
+    this._animating = true;
+    this._animate();
+  }
+
   dispose() {
+    // Stop animation loop
+    this._animating = false;
+
+    // Remove all event listeners
+    if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
+    if (this._mouseMoveHandler) this.renderer.domElement.removeEventListener('mousemove', this._mouseMoveHandler);
+    if (this._clickHandler) this.renderer.domElement.removeEventListener('click', this._clickHandler);
+    if (this._contextLostHandler) this.renderer.domElement.removeEventListener('webglcontextlost', this._contextLostHandler);
+    if (this._contextRestoredHandler) this.renderer.domElement.removeEventListener('webglcontextrestored', this._contextRestoredHandler);
+
     if (this.asteroidBelt) this.asteroidBelt.dispose();
     if (this.issTracker) this.issTracker.dispose();
     if (this.earthCityLights) {
@@ -1733,7 +1828,44 @@ export class SolarSystemScene {
       }
       mat.dispose();
     }
+
+    // Traverse scene graph and dispose all geometries and materials
+    if (this.scene) {
+      this.scene.traverse((obj) => {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          for (const mat of mats) {
+            // Dispose all texture uniforms
+            if (mat.uniforms) {
+              for (const uniform of Object.values(mat.uniforms)) {
+                if (uniform.value && uniform.value.isTexture) uniform.value.dispose();
+              }
+            }
+            // Dispose standard texture slots
+            for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'alphaMap', 'bumpMap']) {
+              if (mat[key] && mat[key].isTexture) mat[key].dispose();
+            }
+            mat.dispose();
+          }
+        }
+      });
+    }
+
+    // Dispose all loaded textures
+    if (this.textures) {
+      for (const tex of Object.values(this.textures)) {
+        if (tex && tex.isTexture) tex.dispose();
+      }
+    }
+
+    // Dispose composer render targets
+    if (this.composer) {
+      this.composer.passes.forEach(pass => {
+        if (pass.renderToScreen === false && pass.renderTarget) pass.renderTarget.dispose();
+      });
+    }
+
     this.renderer.dispose();
-    window.removeEventListener('resize', this._onResize);
   }
 }

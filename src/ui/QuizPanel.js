@@ -4,6 +4,7 @@
  */
 import { t } from '../i18n/i18n.js';
 import { QUIZ_CATEGORIES, QUIZ_QUESTIONS, shuffleQuestions, filterQuestions, getLocalizedQuestion } from '../data/quizQuestions.js';
+import { escapeHTML, sanitizeHTML } from '../utils/sanitize.js';
 
 /**
  * Renders the quiz category selection menu.
@@ -15,10 +16,10 @@ export function renderQuizMenu() {
   let categoryCards = '';
   for (const cat of QUIZ_CATEGORIES) {
     categoryCards += `
-      <button class="quiz-category-card" data-category="${cat.id}">
+      <button class="quiz-category-card" data-category="${escapeHTML(cat.id)}">
         <span class="cat-icon">${cat.icon}</span>
-        <span class="cat-name">${t(cat.name)}</span>
-        <span class="cat-count">${cat.count} ${t('quiz.questions')}</span>
+        <span class="cat-name">${escapeHTML(t(cat.name))}</span>
+        <span class="cat-count">${escapeHTML(String(cat.count))} ${escapeHTML(t('quiz.questions'))}</span>
       </button>`;
   }
 
@@ -71,17 +72,18 @@ export function renderQuizQuestion(question, index, total, selectedAnswer) {
     const selectedClass = selectedAnswer === i ? ' selected' : '';
     optionsHtml += `
       <button class="quiz-option${selectedClass}" data-index="${i}">
-        <span class="quiz-option-letter">${letters[i]}</span>
-        <span class="quiz-option-text">${question.options[i]}</span>
+        <span class="quiz-option-letter">${escapeHTML(letters[i])}</span>
+        <span class="quiz-option-text">${sanitizeHTML(question.options[i])}</span>
       </button>`;
   }
 
   return `
     <div class="quiz-question">
       <div class="quiz-progress">
-        ${t('quiz.questions')} ${index + 1} / ${total}
+        <progress class="quiz-progress-bar" value="${index + 1}" max="${total}" aria-label="${escapeHTML(t('quiz.questions'))} ${index + 1} / ${total}"></progress>
+        <span class="quiz-progress-text">${escapeHTML(t('quiz.questions'))} ${index + 1} / ${total}</span>
       </div>
-      <div class="quiz-question-text">${question.question}</div>
+      <div class="quiz-question-text">${sanitizeHTML(question.question)}</div>
       <div class="quiz-options">
         ${optionsHtml}
       </div>
@@ -108,28 +110,28 @@ export function renderQuizResult(question, selectedAnswer) {
     if (i === selectedAnswer && !isCorrect) cls += ' incorrect';
     optionsHtml += `
       <div class="${cls}">
-        <span class="quiz-option-letter">${letters[i]}</span>
-        <span class="quiz-option-text">${question.options[i]}</span>
+        <span class="quiz-option-letter">${escapeHTML(letters[i])}</span>
+        <span class="quiz-option-text">${sanitizeHTML(question.options[i])}</span>
       </div>`;
   }
 
   let learnMoreHtml = '';
   if (question.relatedPlanet) {
     learnMoreHtml = `
-      <button class="quiz-learn-more" data-planet="${question.relatedPlanet}">
-        ${t('quiz.learnMore')}
+      <button class="quiz-learn-more" data-planet="${escapeHTML(question.relatedPlanet)}">
+        ${escapeHTML(t('quiz.learnMore'))}
       </button>`;
   }
 
   return `
     <div class="quiz-result ${resultClass}">
-      <div class="quiz-result-label">${resultLabel}</div>
-      <div class="quiz-question-text">${question.question}</div>
+      <div class="quiz-result-label">${escapeHTML(resultLabel)}</div>
+      <div class="quiz-question-text">${sanitizeHTML(question.question)}</div>
       <div class="quiz-options">
         ${optionsHtml}
       </div>
       <div class="quiz-explanation">
-        <strong>${t('quiz.explanation')}:</strong> ${question.explanation}
+        <strong>${escapeHTML(t('quiz.explanation'))}:</strong> ${sanitizeHTML(question.explanation)}
       </div>
       ${learnMoreHtml}
     </div>`;
@@ -162,14 +164,14 @@ export function renderQuizSummary(results, totalTime) {
       const lq = getLocalizedQuestion(r.question);
       reviewHtml += `
         <div class="quiz-review-item">
-          <div class="quiz-review-question">${lq.question}</div>
+          <div class="quiz-review-question">${sanitizeHTML(lq.question)}</div>
           <div class="quiz-review-answer incorrect">
-            ${t('quiz.incorrect')}: ${letters[r.selectedAnswer]} - ${lq.options[r.selectedAnswer]}
+            ${escapeHTML(t('quiz.incorrect'))}: ${escapeHTML(letters[r.selectedAnswer])} - ${sanitizeHTML(lq.options[r.selectedAnswer])}
           </div>
           <div class="quiz-review-answer correct">
-            ${t('quiz.correct')}: ${letters[lq.correct]} - ${lq.options[lq.correct]}
+            ${escapeHTML(t('quiz.correct'))}: ${escapeHTML(letters[lq.correct])} - ${sanitizeHTML(lq.options[lq.correct])}
           </div>
-          <div class="quiz-explanation">${lq.explanation}</div>
+          <div class="quiz-explanation">${sanitizeHTML(lq.explanation)}</div>
         </div>`;
     }
     reviewHtml += '</div>';

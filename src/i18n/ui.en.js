@@ -11,6 +11,7 @@ export const ui_en = {
   'loading.timeout': 'Taking longer than expected...',
 
   // Nav buttons
+  'nav.timeSpeed': 'Time speed',
   'nav.overview': 'Overview',
   'nav.compare': 'Compare',
   'nav.speed': 'Speed',
@@ -172,7 +173,7 @@ export const ui_en = {
   'attr.neon': 'Neon',
 
   // Info panel toggle
-  'info.showMore': 'Show more',
+  'info.showMore': 'More details',
   'info.showLess': 'Show less',
 
   // Cross-section / Cutaway
@@ -335,4 +336,15 @@ export const ui_en = {
   'quiz.cat.astronomy': 'Astronomy',
   'aria.quiz': 'Astrophysics Quiz',
   'aria.closeQuiz': 'Close quiz panel',
+
+  // Accessibility announcements (I18N-3)
+  'a11y.nowViewing': 'Now viewing',
+  'aria.canvas3dDefault': '3D Solar System — use the planet bar below to select a body',
+  'aria.canvas3dViewing': '3D Solar System — currently viewing',
+  'aria.canvas3dSuffix': '. Use the planet bar to select another body.',
+
+  // Error / feedback messages (I18N-3)
+  'error.panelRender': 'Something went wrong displaying this content.',
+  'error.offline': 'No internet connection — some features may be unavailable.',
+  'audio.resumeHint': 'Click to enable audio',
 };

@@ -2,6 +2,7 @@
  * AudioManager — multi-track music system with crossfade and context-aware switching.
  * Uses Web Audio API with per-track gain nodes and a master gain.
  */
+import { storageGet, storageSet } from '../utils/storage.js';
 
 const STORAGE_KEY = 'ozmos-music-muted';
 const VOLUME_KEY = 'ozmos-music-volume';
@@ -30,16 +31,14 @@ class AudioManager {
     this.playing = false;
 
     // Restore persisted state — default to unmuted so music auto-plays
-    const storedMuted = localStorage.getItem(STORAGE_KEY);
-    this.muted = storedMuted === 'true'; // false by default (including when null)
+    this.muted = storageGet(STORAGE_KEY) === 'true'; // false by default (including when null)
 
-    const storedVolume = localStorage.getItem(VOLUME_KEY);
+    const storedVolume = storageGet(VOLUME_KEY);
     this._volume = storedVolume !== null ? parseFloat(storedVolume) : 0.3;
 
-    const storedTrack = localStorage.getItem(TRACK_KEY);
-    this._preferredTrack = storedTrack || 'epic';
+    this._preferredTrack = storageGet(TRACK_KEY, ['calm', 'epic', 'contemplative'], 'epic');
 
-    const storedAuto = localStorage.getItem(AUTO_KEY);
+    const storedAuto = storageGet(AUTO_KEY);
     this.autoSwitch = storedAuto === null ? true : storedAuto === 'true';
 
     this._crossfadeDuration = 2.5;
@@ -59,30 +58,32 @@ class AudioManager {
       return;
     }
 
-    // Load all tracks in parallel
-    const loadPromises = Object.entries(TRACK_PATHS).map(async ([id, path]) => {
-      try {
-        const response = await fetch(path);
-        if (!response.ok) return;
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = await this.ctx.decodeAudioData(arrayBuffer);
-
-        const gain = this.ctx.createGain();
-        gain.gain.value = 0;
-        gain.connect(this.masterGain);
-
-        this.tracks.set(id, { buffer, gain, source: null });
-      } catch {
-        // Track not available — skip silently
-      }
-    });
-
-    await Promise.all(loadPromises);
+    // Lazy-load: only fetch the preferred track now; load others on demand
+    await this._loadTrack(this._preferredTrack);
     this.loaded = this.tracks.size > 0;
 
     // Auto-play if user previously opted in (not muted)
     if (this.loaded && !this.muted) {
       this._playTrack(this._preferredTrack);
+    }
+  }
+
+  /** Load a single track by ID if not already loaded */
+  async _loadTrack(trackId) {
+    if (this.tracks.has(trackId)) return; // already loaded
+    const path = TRACK_PATHS[trackId];
+    if (!path || !this.ctx) return;
+    try {
+      const response = await fetch(path);
+      if (!response.ok) return;
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = await this.ctx.decodeAudioData(arrayBuffer);
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0;
+      gain.connect(this.masterGain);
+      this.tracks.set(trackId, { buffer, gain, source: null });
+    } catch {
+      // Track not available — skip silently
     }
   }
 
@@ -101,16 +102,16 @@ class AudioManager {
     track.source.start(0);
   }
 
-  _playTrack(trackId) {
+  async _playTrack(trackId) {
     if (!this.loaded) return;
+    // Lazy-load track on demand
     if (!this.tracks.has(trackId)) {
-      // Fallback to calm if requested track unavailable
-      trackId = 'calm';
-      if (!this.tracks.has(trackId)) {
-        // Use first available track
-        trackId = this.tracks.keys().next().value;
-        if (!trackId) return;
-      }
+      await this._loadTrack(trackId);
+    }
+    if (!this.tracks.has(trackId)) {
+      // Fallback to first available track
+      trackId = this.tracks.keys().next().value;
+      if (!trackId) return;
     }
 
     if (this.ctx.state === 'suspended') {
@@ -132,9 +133,13 @@ class AudioManager {
     }
   }
 
-  /** Equal-power crossfade between current and target track */
-  crossfadeTo(trackId, duration) {
-    if (!this.loaded || !this.tracks.has(trackId)) return;
+  /** Equal-power crossfade between current and target track — lazy-loads if needed */
+  async crossfadeTo(trackId, duration) {
+    if (!this.loaded) return;
+    if (!this.tracks.has(trackId)) {
+      await this._loadTrack(trackId);
+      if (!this.tracks.has(trackId)) return;
+    }
     duration = duration || this._crossfadeDuration;
 
     const now = this.ctx.currentTime;
@@ -163,7 +168,7 @@ class AudioManager {
 
     this.currentTrack = trackId;
     this.playing = true;
-    localStorage.setItem(TRACK_KEY, trackId);
+    storageSet(TRACK_KEY, trackId);
   }
 
   /** Context-aware auto-switching */
@@ -188,7 +193,7 @@ class AudioManager {
       this._playTrack(this._preferredTrack);
     }
     this.muted = false;
-    localStorage.setItem(STORAGE_KEY, 'false');
+    storageSet(STORAGE_KEY, 'false');
   }
 
   pause() {
@@ -197,7 +202,7 @@ class AudioManager {
     this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, this.ctx.currentTime);
     this.masterGain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + this._rampTime);
     this.muted = true;
-    localStorage.setItem(STORAGE_KEY, 'true');
+    storageSet(STORAGE_KEY, 'true');
   }
 
   toggle() {
@@ -211,7 +216,7 @@ class AudioManager {
 
   setVolume(v) {
     this._volume = Math.max(0, Math.min(1, v));
-    localStorage.setItem(VOLUME_KEY, String(this._volume));
+    storageSet(VOLUME_KEY, String(this._volume));
     if (!this.muted && this.masterGain) {
       this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
       this.masterGain.gain.linearRampToValueAtTime(this._volume, this.ctx.currentTime + 0.1);
@@ -224,7 +229,7 @@ class AudioManager {
 
   setAutoSwitch(enabled) {
     this.autoSwitch = enabled;
-    localStorage.setItem(AUTO_KEY, String(enabled));
+    storageSet(AUTO_KEY, String(enabled));
   }
 
   getAutoSwitch() {

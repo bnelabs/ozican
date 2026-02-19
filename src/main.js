@@ -1,6 +1,26 @@
+// @ts-check
 /**
  * OzMos — Solar System Explorer
  * Main entry point: wires the 3D scene to the UI.
+ *
+ * @typedef {Object} QuizQuestion
+ * @property {string} category
+ * @property {string} question
+ * @property {string} questionTr
+ * @property {string[]} options
+ * @property {string[]} optionsTr
+ * @property {number} correct - zero-based index of correct option
+ * @property {string} explanation
+ * @property {string} explanationTr
+ * @property {string} [planet]
+ *
+ * @typedef {Object} MissionWaypoint
+ * @property {string} date - ISO date string
+ * @property {string} event
+ * @property {string} eventTr
+ * @property {string[]} facts
+ * @property {string[]} factsTr
+ * @property {string} target - planet/body key
  */
 import { SolarSystemScene } from './scene/SolarSystemScene.js';
 import { renderPlanetInfo, renderCompactPlanetInfo, renderMoonInfo } from './ui/InfoPanel.js';
@@ -15,11 +35,14 @@ import { PLANET_ORDER, SOLAR_SYSTEM } from './data/solarSystem.js';
 import { DWARF_PLANETS, DWARF_PLANET_ORDER } from './data/dwarfPlanets.js';
 import { ASTEROIDS, ASTEROID_ORDER } from './data/asteroids.js';
 import { MISSIONS } from './data/missions.js';
-import { startOnboarding } from './ui/Onboarding.js';
+import { startOnboarding, restartOnboarding } from './ui/Onboarding.js';
 import { renderQuizMenu, renderQuizQuestion, renderQuizResult, renderQuizSummary } from './ui/QuizPanel.js';
 import { filterQuestions } from './data/quizQuestions.js';
 import { initLang, setLang, getLang, t, onLangChange } from './i18n/i18n.js';
 import { getLocalizedPlanet } from './i18n/localizedData.js';
+import { storageGet, storageSet, storageRemove } from './utils/storage.js';
+import { trapFocus } from './utils/focusTrap.js';
+import { makeSwipeDismissible } from './utils/swipe.js';
 
 // ==================== DOM Elements ====================
 const dedicationScreen = document.getElementById('dedication-screen');
@@ -58,6 +81,7 @@ const btnQuiz = document.getElementById('btn-quiz');
 
 const btnTour = document.getElementById('btn-tour');
 const btnStorm = document.getElementById('btn-storm');
+const btnHelp = document.getElementById('btn-help');
 const musicPanel = document.getElementById('music-panel');
 const musicVolumeSlider = document.getElementById('music-volume-slider');
 const musicAutoSwitch = document.getElementById('music-auto-switch');
@@ -67,6 +91,77 @@ const infoDragHandle = document.getElementById('info-drag-handle');
 
 const planetBar = document.getElementById('planet-bar');
 const planetThumbs = document.querySelectorAll('.planet-thumb');
+const srAnnouncer = document.getElementById('sr-announcer');
+
+// ==================== Accessibility ====================
+
+/** Announce a message to screen readers via the live region */
+function announce(msg) {
+  if (!srAnnouncer) return;
+  srAnnouncer.textContent = '';
+  // Force re-announcement even for same text by clearing first
+  requestAnimationFrame(() => { srAnnouncer.textContent = msg; });
+}
+
+/** Update canvas ARIA label to reflect current focused body */
+function updateCanvasAriaLabel(bodyName) {
+  if (canvasContainer) {
+    canvasContainer.setAttribute(
+      'aria-label',
+      bodyName
+        ? `${t('aria.canvas3dViewing')} ${bodyName}${t('aria.canvas3dSuffix')}`
+        : t('aria.canvas3dDefault')
+    );
+  }
+}
+
+// ==================== Focus Trap + Swipe State ====================
+// Each panel stores its active trap so close() can release it
+const _swipeHandles = { info: null, compare: null };
+
+const _focusTraps = {
+  info: null,
+  compare: null,
+  mission: null,
+  quiz: null,
+  music: null,
+};
+
+function _activateTrap(key, el) {
+  if (_focusTraps[key]) _focusTraps[key].release();
+  _focusTraps[key] = trapFocus(el);
+}
+
+function _releaseTrap(key) {
+  if (_focusTraps[key]) {
+    _focusTraps[key].release();
+    _focusTraps[key] = null;
+  }
+}
+
+// ==================== Error Boundaries ====================
+
+/** Render a friendly error message into a container on panel render failure */
+function renderError(container, err) {
+  console.error('[OzMos] Panel render error:', err);
+  if (container) {
+    container.innerHTML = `<div class="panel-error"><p>${t('error.panelRender') || 'Something went wrong displaying this content.'}</p></div>`;
+  }
+}
+
+/**
+ * Safely assign rendered HTML to a container.
+ * Catches render errors so one broken panel doesn't cascade.
+ * @param {HTMLElement} container
+ * @param {() => string} renderFn
+ */
+function safeRender(container, renderFn) {
+  try {
+    container.innerHTML = renderFn();
+  } catch (err) {
+    renderError(container, err);
+  }
+}
 
 // ==================== State ====================
 let scene;
@@ -186,12 +281,10 @@ function refreshOpenPanels() {
     if (currentMoonIndex !== null) {
       openMoonInfoPanel(currentPlanetKey, currentMoonIndex);
     } else if (infoPanel.classList.contains('expanded')) {
-      // Re-render expanded view
-      infoContent.innerHTML = renderPlanetInfo(currentPlanetKey);
+      safeRender(infoContent, () => renderPlanetInfo(currentPlanetKey));
       wireInfoPanelHandlers();
     } else {
-      // Re-render compact view
-      infoContent.innerHTML = renderCompactPlanetInfo(currentPlanetKey);
+      safeRender(infoContent, () => renderCompactPlanetInfo(currentPlanetKey));
       wireCompactHandlers(currentPlanetKey);
     }
   }
@@ -199,16 +292,16 @@ function refreshOpenPanels() {
   // Re-render compare panel if open
   if (!comparePanel.classList.contains('hidden')) {
     const isMobile = window.innerWidth <= 768;
-    compareContent.innerHTML = isMobile ? renderCompareCards() : renderCompareTable();
+    safeRender(compareContent, () => isMobile ? renderCompareCards() : renderCompareTable());
   }
 
   // Re-render mission panel if open
   if (missionPanel && !missionPanel.classList.contains('hidden')) {
     if (currentMissionId) {
-      missionContent.innerHTML = renderMissionDetail(currentMissionId);
+      safeRender(missionContent, () => renderMissionDetail(currentMissionId));
       wireMissionDetailHandlers();
     } else {
-      missionContent.innerHTML = renderMissionList();
+      safeRender(missionContent, () => renderMissionList());
       wireMissionListHandlers();
     }
   }
@@ -220,7 +313,7 @@ function refreshOpenPanels() {
 
   // Re-render quiz panel if open and showing menu
   if (quizPanel && !quizPanel.classList.contains('hidden') && !quizActive) {
-    quizContent.innerHTML = renderQuizMenu();
+    safeRender(quizContent, () => renderQuizMenu());
     wireQuizMenuHandlers();
   }
 }
@@ -245,13 +338,18 @@ function showLangPicker() {
   langPicker.classList.remove('hidden');
   loadingScreen.classList.add('hidden');
 
+  // Focus the first language option for keyboard users
   const pickerBtns = langPicker.querySelectorAll('.lang-picker-btn');
+  if (pickerBtns[0]) {
+    // Defer to allow browser to render the element
+    requestAnimationFrame(() => pickerBtns[0].focus());
+  }
   pickerBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       // Init AudioContext synchronously within user gesture
       audioManager.init();
       const lang = btn.dataset.lang;
-      localStorage.setItem(LANG_STORAGE_KEY, lang);
+      storageSet(LANG_STORAGE_KEY, lang);
       setLang(lang);
       langPicker.classList.add('fade-out');
       setTimeout(() => {
@@ -342,6 +440,11 @@ function startApp() {
     showError(e.detail || 'An error occurred while loading the 3D scene.');
   });
 
+  // Help/tutorial restart button
+  if (btnHelp) {
+    btnHelp.addEventListener('click', () => restartOnboarding());
+  }
+
   // Wire scene callbacks
   wireSceneCallbacks();
 
@@ -384,12 +487,12 @@ function showError(message) {
     ['ozican-music-auto', 'ozmos-music-auto'],
   ];
   for (const [oldKey, newKey] of migrations) {
-    const val = localStorage.getItem(oldKey);
-    if (val !== null && localStorage.getItem(newKey) === null) {
-      localStorage.setItem(newKey, val);
+    const val = storageGet(oldKey);
+    if (val !== null && storageGet(newKey) === null) {
+      storageSet(newKey, val);
     }
     if (val !== null) {
-      localStorage.removeItem(oldKey);
+      storageRemove(oldKey);
     }
   }
 })();
@@ -474,11 +577,11 @@ function endDedication() {
   }
 
   dedicationScreen.classList.add('fade-out');
-  localStorage.setItem(DEDICATION_KEY, '1');
+  storageSet(DEDICATION_KEY, '1');
   setTimeout(() => {
     dedicationScreen.classList.add('hidden');
     dedicationScreen.classList.remove('fade-out');
-    if (localStorage.getItem(LANG_STORAGE_KEY)) {
+    if (storageGet(LANG_STORAGE_KEY)) {
       initLang();
       startApp();
     } else {
@@ -655,7 +758,7 @@ function openInfoPanel(key) {
   currentMoonIndex = null;
 
   // Show compact view first (visual-first: 3D scene stays dominant)
-  infoContent.innerHTML = renderCompactPlanetInfo(key);
+  safeRender(infoContent, () => renderCompactPlanetInfo(key));
   infoPanel.classList.remove('hidden', 'expanded');
   infoPanel.setAttribute('aria-hidden', 'false');
   comparePanel.classList.add('hidden');
@@ -674,6 +777,10 @@ function openInfoPanel(key) {
   });
 
   wireCompactHandlers(key);
+  _activateTrap('info', infoPanel);
+  // UX-10: Swipe down to dismiss
+  if (_swipeHandles.info) _swipeHandles.info.release();
+  _swipeHandles.info = makeSwipeDismissible(infoPanel, closeInfoPanel);
 
   // Focus camera on the selected body (planets, dwarfs, and asteroids all use focusOnPlanet)
   if (scene) {
@@ -685,6 +792,12 @@ function openInfoPanel(key) {
 
   // URL deep linking
   history.replaceState(null, '', '#' + key);
+
+  // Accessibility announcements
+  const bodyData = getLocalizedPlanet(key);
+  const bodyName = bodyData ? bodyData.name : key;
+  announce(`${t('a11y.nowViewing') || 'Now viewing'} ${bodyName}`);
+  updateCanvasAriaLabel(bodyName);
 }
 
 function wireCompactHandlers(key) {
@@ -693,6 +806,11 @@ function wireCompactHandlers(key) {
     showMoreBtn.addEventListener('click', () => {
       expandInfoPanel(key);
     });
+    // UX-4: Pulse glow on first open to draw attention
+    if (!storageGet('ozmos-panel-pulsed')) {
+      showMoreBtn.classList.add('pulse-first');
+      storageSet('ozmos-panel-pulsed', '1');
+    }
   }
 
   // Wire cutaway toggle in compact view
@@ -717,7 +835,7 @@ function wireCompactHandlers(key) {
 }
 
 function expandInfoPanel(key) {
-  infoContent.innerHTML = renderPlanetInfo(key);
+  safeRender(infoContent, () => renderPlanetInfo(key));
   infoPanel.classList.add('expanded');
   wireInfoPanelHandlers();
 
@@ -725,14 +843,14 @@ function expandInfoPanel(key) {
   const showLessBtn = document.createElement('button');
   showLessBtn.className = 'info-toggle-btn';
   showLessBtn.id = 'info-show-less';
-  showLessBtn.innerHTML = (t('info.showLess') || 'Show less') + ' &#x25B2;';
+  showLessBtn.textContent = (t('info.showLess') || 'Show less') + ' ▲';
   showLessBtn.style.marginBottom = 'var(--space-3)';
   infoContent.prepend(showLessBtn);
 
   showLessBtn.addEventListener('click', () => {
     // Collapse back to compact
     disposeCutaway();
-    infoContent.innerHTML = renderCompactPlanetInfo(key);
+    safeRender(infoContent, () => renderCompactPlanetInfo(key));
     infoPanel.classList.remove('expanded');
     wireCompactHandlers(key);
   });
@@ -741,7 +859,7 @@ function expandInfoPanel(key) {
 function openMoonInfoPanel(planetKey, moonIndex) {
   currentMoonIndex = moonIndex;
   currentPlanetKey = planetKey;
-  infoContent.innerHTML = renderMoonInfo(planetKey, moonIndex);
+  safeRender(infoContent, () => renderMoonInfo(planetKey, moonIndex));
   infoPanel.classList.remove('hidden');
   infoPanel.setAttribute('aria-hidden', 'false');
 
@@ -812,6 +930,11 @@ function closeInfoPanel() {
 
   // Clear URL hash
   history.replaceState(null, '', window.location.pathname + window.location.search);
+
+  // Reset canvas ARIA label and release focus trap + swipe
+  updateCanvasAriaLabel(null);
+  _releaseTrap('info');
+  if (_swipeHandles.info) { _swipeHandles.info.release(); _swipeHandles.info = null; }
 }
 
 infoClose.addEventListener('click', closeInfoPanel);
@@ -946,11 +1069,16 @@ if (asteroidToggle && asteroidSubmenu) {
 
 // ==================== Planet Bar Scroll Indicators ====================
 
+const scrollHint = document.getElementById('planet-bar-scroll-hint');
+
 function updateScrollIndicators() {
   if (!planetBar) return;
   const { scrollLeft, scrollWidth, clientWidth } = planetBar;
   planetBar.classList.toggle('scroll-left', scrollLeft > 5);
-  planetBar.classList.toggle('scroll-right', scrollLeft < scrollWidth - clientWidth - 5);
+  const atEnd = scrollLeft >= scrollWidth - clientWidth - 5;
+  planetBar.classList.toggle('scroll-right', !atEnd);
+  // UX-1: hide chevron once user scrolls to end
+  if (scrollHint && atEnd) scrollHint.classList.add('hidden');
 }
 
 planetBar.addEventListener('scroll', updateScrollIndicators, { passive: true });
@@ -1001,27 +1129,32 @@ btnCompare.addEventListener('click', () => {
   const isHidden = comparePanel.classList.contains('hidden');
   if (isHidden) {
     const isMobile = window.innerWidth <= 768;
-    compareContent.innerHTML = isMobile ? renderCompareCards() : renderCompareTable();
+    safeRender(compareContent, () => isMobile ? renderCompareCards() : renderCompareTable());
     comparePanel.classList.remove('hidden');
     comparePanel.setAttribute('aria-hidden', 'false');
     infoPanel.classList.add('hidden');
     infoPanel.setAttribute('aria-hidden', 'true');
     btnCompare.classList.add('active');
     btnCompare.setAttribute('aria-pressed', 'true');
+    _activateTrap('compare', comparePanel);
+    // UX-10: Swipe down to close
+    if (_swipeHandles.compare) _swipeHandles.compare.release();
+    _swipeHandles.compare = makeSwipeDismissible(comparePanel, closeComparePanel);
   } else {
-    comparePanel.classList.add('hidden');
-    comparePanel.setAttribute('aria-hidden', 'true');
-    btnCompare.classList.remove('active');
-    btnCompare.setAttribute('aria-pressed', 'false');
+    closeComparePanel();
   }
 });
 
-compareClose.addEventListener('click', () => {
+function closeComparePanel() {
   comparePanel.classList.add('hidden');
   comparePanel.setAttribute('aria-hidden', 'true');
   btnCompare.classList.remove('active');
   btnCompare.setAttribute('aria-pressed', 'false');
-});
+  _releaseTrap('compare');
+  if (_swipeHandles.compare) { _swipeHandles.compare.release(); _swipeHandles.compare = null; }
+}
+
+compareClose.addEventListener('click', closeComparePanel);
 
 btnSpeed.addEventListener('click', () => {
   speedIndex = (speedIndex + 1) % speeds.length;
@@ -1078,10 +1211,31 @@ if (navHamburger && navControls) {
 
 function updateMusicIcon() {
   if (musicIcon) {
-    musicIcon.innerHTML = audioManager.isMuted ? '&#128264;' : '&#128266;';
+    musicIcon.textContent = audioManager.isMuted ? '🔇' : '🔊';
   }
   if (btnMusic) {
     btnMusic.classList.toggle('active', !audioManager.isMuted);
+  }
+
+  // RES-5: Show audio resume hint if AudioContext is suspended
+  const ctx = audioManager.ctx;
+  if (ctx && ctx.state === 'suspended' && !audioManager.isMuted) {
+    if (!document.getElementById('audio-resume-hint')) {
+      const hint = document.createElement('div');
+      hint.id = 'audio-resume-hint';
+      hint.style.cssText = 'position:absolute;bottom:calc(100% + 8px);right:0;background:rgba(20,20,35,0.95);color:#e8e8f0;font-size:0.78rem;padding:8px 12px;border-radius:8px;white-space:nowrap;border:1px solid rgba(255,255,255,0.1);cursor:pointer;z-index:1000;';
+      hint.textContent = `▶ ${t('audio.resumeHint') || 'Click to enable audio'}`;
+      hint.addEventListener('click', () => {
+        ctx.resume().then(() => { hint.remove(); });
+      });
+      if (btnMusic) {
+        btnMusic.style.position = 'relative';
+        btnMusic.appendChild(hint);
+      }
+    }
+  } else {
+    const existingHint = document.getElementById('audio-resume-hint');
+    if (existingHint) existingHint.remove();
   }
 }
 
@@ -1168,7 +1322,7 @@ document.addEventListener('click', (e) => {
 
 function openMissionPanel() {
   currentMissionId = null;
-  missionContent.innerHTML = renderMissionList();
+  safeRender(missionContent, () => renderMissionList());
   missionPanel.classList.remove('hidden');
   missionPanel.setAttribute('aria-hidden', 'false');
   // Close other panels
@@ -1206,7 +1360,7 @@ function wireMissionDetailHandlers() {
     backBtn.addEventListener('click', () => {
       exitMissionMode();
       currentMissionId = null;
-      missionContent.innerHTML = renderMissionList();
+      safeRender(missionContent, () => renderMissionList());
       wireMissionListHandlers();
     });
   }
@@ -1314,8 +1468,10 @@ function updateMissionHUD(progress, date) {
   const playhead = document.getElementById('timeline-playhead');
   const dateLabel = document.getElementById('mission-hud-date');
 
+  const track = document.getElementById('timeline-track');
   if (fill) fill.style.width = (progress * 100) + '%';
   if (playhead) playhead.style.left = (progress * 100) + '%';
+  if (track) track.setAttribute('aria-valuenow', Math.round(progress * 100));
   if (dateLabel && date) {
     const d = new Date(date);
     dateLabel.textContent = d.toLocaleDateString(getLang() === 'tr' ? 'tr-TR' : 'en-US', {
@@ -1385,15 +1541,17 @@ function wireMissionHUDHandlers(missionId) {
   const doExitMission = () => {
     exitMissionMode();
     currentMissionId = null;
-    missionContent.innerHTML = renderMissionList();
+    safeRender(missionContent, () => renderMissionList());
     wireMissionListHandlers();
   };
 
   if (exitBtn) exitBtn.addEventListener('click', doExitMission);
   if (closeBtn) closeBtn.addEventListener('click', doExitMission);
 
-  // Timeline scrubber: click to seek
+  // Timeline scrubber: click to seek + keyboard (A11Y-5)
   if (track) {
+    const SEEK_STEP = 0.02;
+
     const seekToPosition = (clientX) => {
       const rect = track.getBoundingClientRect();
       const progress = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
@@ -1401,10 +1559,28 @@ function wireMissionHUDHandlers(missionId) {
         missionRenderer.seekTo(progress);
         updateMissionHUD(progress, null);
       }
+      track.setAttribute('aria-valuenow', Math.round(progress * 100));
     };
 
     track.addEventListener('click', (e) => {
       seekToPosition(e.clientX);
+    });
+
+    // Keyboard navigation: ArrowLeft/Right/Home/End (A11Y-5)
+    track.addEventListener('keydown', (e) => {
+      const cur = missionRenderer?.getProgress?.() ?? 0;
+      let next = cur;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowUp') next = Math.min(1, cur + SEEK_STEP);
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') next = Math.max(0, cur - SEEK_STEP);
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = 1;
+      else return;
+      e.preventDefault();
+      if (missionRenderer) {
+        missionRenderer.seekTo(next);
+        updateMissionHUD(next, null);
+      }
+      track.setAttribute('aria-valuenow', Math.round(next * 100));
     });
 
     // Drag playhead
@@ -1558,7 +1734,7 @@ function openQuizPanel() {
   quizCurrentIndex = 0;
   quizResults = [];
   quizSelectedCategory = null;
-  quizContent.innerHTML = renderQuizMenu();
+  safeRender(quizContent, () => renderQuizMenu());
   quizPanel.classList.remove('hidden');
   quizPanel.setAttribute('aria-hidden', 'false');
   // Close other panels
@@ -1628,7 +1804,7 @@ function showQuizQuestion() {
     return;
   }
   const question = quizQuestions[quizCurrentIndex];
-  quizContent.innerHTML = renderQuizQuestion(question, quizCurrentIndex, quizQuestions.length, null);
+  safeRender(quizContent, () => renderQuizQuestion(question, quizCurrentIndex, quizQuestions.length, null));
   wireQuizQuestionHandlers(question);
 }
 
@@ -1641,7 +1817,7 @@ function wireQuizQuestionHandlers(question) {
       quizResults.push({ question, selectedAnswer: selectedIndex, correct: isCorrect });
 
       // Show result
-      quizContent.innerHTML = renderQuizResult(question, selectedIndex);
+      safeRender(quizContent, () => renderQuizResult(question, selectedIndex));
 
       // Add next button
       const nextBtn = document.createElement('button');
@@ -1670,7 +1846,7 @@ function wireQuizQuestionHandlers(question) {
 function showQuizSummary() {
   quizActive = false;
   const totalTime = (Date.now() - quizStartTime) / 1000;
-  quizContent.innerHTML = renderQuizSummary(quizResults, totalTime);
+  safeRender(quizContent, () => renderQuizSummary(quizResults, totalTime));
 
   const playAgainBtn = document.getElementById('quiz-play-again');
   if (playAgainBtn) {
@@ -1783,7 +1959,7 @@ document.addEventListener('keydown', (e) => {
     if (missionModeActive) {
       exitMissionMode();
       currentMissionId = null;
-      missionContent.innerHTML = renderMissionList();
+      safeRender(missionContent, () => renderMissionList());
       wireMissionListHandlers();
       return;
     }
@@ -1865,9 +2041,17 @@ canvasContainer.addEventListener('touchend', (e) => {
 
 // ==================== URL Deep Linking ====================
 
+// Set of all valid body keys — used to validate URL hashes
+const VALID_BODY_KEYS = new Set([
+  ...Object.keys(SOLAR_SYSTEM),
+  ...Object.keys(DWARF_PLANETS),
+  ...Object.keys(ASTEROIDS),
+]);
+
 function handleInitialHash() {
   const hash = window.location.hash.replace('#', '');
-  if (hash && (SOLAR_SYSTEM[hash] || DWARF_PLANETS[hash] || ASTEROIDS[hash])) {
+  if (!hash) return;
+  if (VALID_BODY_KEYS.has(hash)) {
     // Defer hash navigation until cinematic sweep completes so the
     // Earth → overview opening isn't interrupted
     if (scene && scene._cinematicSweepActive) {
@@ -1880,19 +2064,61 @@ function handleInitialHash() {
     } else {
       openInfoPanel(hash);
     }
+  } else {
+    // Invalid hash — clear it to avoid confusing state
+    history.replaceState(null, '', window.location.pathname + window.location.search);
   }
 }
 
 window.addEventListener('hashchange', () => {
   const hash = window.location.hash.replace('#', '');
-  if (hash && (SOLAR_SYSTEM[hash] || DWARF_PLANETS[hash] || ASTEROIDS[hash])) {
+  if (hash && VALID_BODY_KEYS.has(hash)) {
     if (currentPlanetKey !== hash) {
       openInfoPanel(hash);
     }
   } else if (!hash) {
     closeInfoPanel();
+  } else {
+    // Invalid hash — clear it silently
+    history.replaceState(null, '', window.location.pathname + window.location.search);
   }
 });
+
+// ==================== Offline Detection (RES-3) ====================
+
+(function initOfflineDetection() {
+  let offlineToast = null;
+
+  function showOfflineToast() {
+    if (offlineToast) return;
+    offlineToast = document.createElement('div');
+    offlineToast.id = 'offline-toast';
+    offlineToast.setAttribute('role', 'status');
+    offlineToast.setAttribute('aria-live', 'polite');
+    offlineToast.textContent = `⚠ ${t('error.offline') || 'No internet connection — some features may be unavailable.'}`;
+    offlineToast.style.cssText = [
+      'position:fixed', 'bottom:20px', 'left:50%', 'transform:translateX(-50%) translateY(0)',
+      'background:rgba(30,20,10,0.95)', 'color:#ffd080', 'border:1px solid rgba(255,180,50,0.4)',
+      'padding:10px 20px', 'border-radius:24px', 'font-size:0.82rem', 'z-index:9000',
+      'backdrop-filter:blur(12px)', 'transition:opacity 0.3s',
+    ].join(';');
+    document.body.appendChild(offlineToast);
+  }
+
+  function hideOfflineToast() {
+    if (!offlineToast) return;
+    offlineToast.style.opacity = '0';
+    setTimeout(() => {
+      offlineToast?.remove();
+      offlineToast = null;
+    }, 350);
+  }
+
+  window.addEventListener('offline', showOfflineToast);
+  window.addEventListener('online', hideOfflineToast);
+
+  if (!navigator.onLine) showOfflineToast();
+})();
 
 // ==================== Console welcome ====================
 console.log(

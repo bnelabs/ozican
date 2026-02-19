@@ -3,13 +3,28 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <!-- Security: Content Security Policy -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline';
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    font-src 'self' https://fonts.gstatic.com;
+    img-src 'self' data: blob: https://upload.wikimedia.org https://www.nasa.gov;
+    media-src 'self' blob:;
+    connect-src 'self';
+    object-src 'none';
+    base-uri 'self';
+  " />
   <title>OzMos — Solar System Explorer</title>
   <link rel="stylesheet" href="/src/styles/main.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 </head>
 <body>
-  <main role="application" aria-label="3D Solar System Visualization">
-    <div id="canvas-container"></div>
+  <!-- Skip link for keyboard/screen-reader users -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <main role="application" aria-label="3D Solar System Visualization" id="main-content">
+    <div id="canvas-container" role="img" aria-label="3D Solar System — use the planet bar below to select a body"></div>
   </main>
 
   <!-- Dedication screen (first visit) -->
@@ -31,17 +46,17 @@
   </div>
 
   <!-- Language picker (first visit) -->
-  <div id="lang-picker" class="hidden">
+  <div id="lang-picker" class="hidden" role="dialog" aria-modal="true" aria-labelledby="lang-picker-heading">
     <div class="lang-picker-card">
-      <h1 class="lang-picker-title">OzMos</h1>
+      <h1 class="lang-picker-title" id="lang-picker-heading">OzMos</h1>
       <p class="lang-picker-subtitle">Choose your language / Dilinizi seçin</p>
-      <div class="lang-picker-options">
-        <button class="lang-picker-btn" data-lang="en">
-          <span class="lang-flag">&#127468;&#127463;</span>
+      <div class="lang-picker-options" role="group" aria-label="Select language">
+        <button class="lang-picker-btn" data-lang="en" aria-label="English">
+          <span class="lang-flag" aria-hidden="true">&#127468;&#127463;</span>
           <span class="lang-label">English</span>
         </button>
-        <button class="lang-picker-btn" data-lang="tr">
-          <span class="lang-flag">&#127481;&#127479;</span>
+        <button class="lang-picker-btn" data-lang="tr" aria-label="Türkçe">
+          <span class="lang-flag" aria-hidden="true">&#127481;&#127479;</span>
           <span class="lang-label">Türkçe</span>
         </button>
       </div>
@@ -87,6 +102,7 @@
       <div class="nav-group" data-group-label="Display">
         <button id="btn-speed" class="nav-btn" title="Animation Speed" aria-label="Animation Speed: 1x">
           <span data-i18n="nav.speed">Speed</span>: <span id="speed-label">1x</span>
+          <span class="speed-mobile-label" data-i18n="nav.timeSpeed">Time speed</span>
         </button>
         <button id="btn-orbits" class="nav-btn active" title="Toggle Orbit Lines" aria-label="Toggle Orbit Lines" aria-pressed="true" data-i18n="nav.orbits">Orbits</button>
         <button id="btn-labels" class="nav-btn active" title="Toggle Labels" aria-label="Toggle Labels" aria-pressed="true" data-i18n="nav.labels">Labels</button>
@@ -155,39 +171,39 @@
 
   <!-- Planet selector bar -->
   <div id="planet-bar" role="navigation" aria-label="Planet selector">
-    <button class="planet-thumb" data-planet="sun" title="Sun" aria-label="Select Sun">
+    <button class="planet-thumb" data-planet="sun" data-body-type="star" title="Sun" aria-label="Select Sun">
       <div class="thumb-dot" style="background: #FDB813; --dot-color: #FDB813;"></div>
       <span>Sun</span>
     </button>
-    <button class="planet-thumb" data-planet="mercury" title="Mercury" aria-label="Select Mercury">
+    <button class="planet-thumb" data-planet="mercury" data-body-type="planet" title="Mercury" aria-label="Select Mercury">
       <div class="thumb-dot" style="background: #8C7E6D; --dot-color: #8C7E6D;"></div>
       <span>Mercury</span>
     </button>
-    <button class="planet-thumb" data-planet="venus" title="Venus" aria-label="Select Venus">
+    <button class="planet-thumb" data-planet="venus" data-body-type="planet" title="Venus" aria-label="Select Venus">
       <div class="thumb-dot" style="background: #C4A45A; --dot-color: #C4A45A;"></div>
       <span>Venus</span>
     </button>
-    <button class="planet-thumb" data-planet="earth" title="Earth" aria-label="Select Earth">
+    <button class="planet-thumb" data-planet="earth" data-body-type="planet" title="Earth" aria-label="Select Earth">
       <div class="thumb-dot" style="background: #4A90D9; --dot-color: #4A90D9;"></div>
       <span>Earth</span>
     </button>
-    <button class="planet-thumb" data-planet="mars" title="Mars" aria-label="Select Mars">
+    <button class="planet-thumb" data-planet="mars" data-body-type="planet" title="Mars" aria-label="Select Mars">
       <div class="thumb-dot" style="background: #C1440E; --dot-color: #C1440E;"></div>
       <span>Mars</span>
     </button>
-    <button class="planet-thumb" data-planet="jupiter" title="Jupiter" aria-label="Select Jupiter">
+    <button class="planet-thumb" data-planet="jupiter" data-body-type="planet" title="Jupiter" aria-label="Select Jupiter">
       <div class="thumb-dot" style="background: #C88B3A; --dot-color: #C88B3A;"></div>
       <span>Jupiter</span>
     </button>
-    <button class="planet-thumb" data-planet="saturn" title="Saturn" aria-label="Select Saturn">
+    <button class="planet-thumb" data-planet="saturn" data-body-type="planet" title="Saturn" aria-label="Select Saturn">
       <div class="thumb-dot" style="background: #C5AB6E; --dot-color: #C5AB6E;"></div>
       <span>Saturn</span>
     </button>
-    <button class="planet-thumb" data-planet="uranus" title="Uranus" aria-label="Select Uranus">
+    <button class="planet-thumb" data-planet="uranus" data-body-type="planet" title="Uranus" aria-label="Select Uranus">
       <div class="thumb-dot" style="background: #72B5C4; --dot-color: #72B5C4;"></div>
       <span>Uranus</span>
     </button>
-    <button class="planet-thumb" data-planet="neptune" title="Neptune" aria-label="Select Neptune">
+    <button class="planet-thumb" data-planet="neptune" data-body-type="planet" title="Neptune" aria-label="Select Neptune">
       <div class="thumb-dot" style="background: #3E54A3; --dot-color: #3E54A3;"></div>
       <span>Neptune</span>
     </button>
@@ -198,23 +214,23 @@
         <span data-i18n="nav.dwarfPlanets">Dwarfs</span>
       </button>
       <div class="dwarf-planet-submenu body-submenu hidden" id="dwarf-submenu">
-        <button class="planet-thumb" data-planet="ceres" title="Ceres" aria-label="Select Ceres">
+        <button class="planet-thumb" data-planet="ceres" data-body-type="dwarf-planet" title="Ceres" aria-label="Select Ceres">
           <div class="thumb-dot" style="background: #8a8a7a; --dot-color: #8a8a7a;"></div>
           <span>Ceres</span>
         </button>
-        <button class="planet-thumb" data-planet="pluto" title="Pluto" aria-label="Select Pluto">
+        <button class="planet-thumb" data-planet="pluto" data-body-type="dwarf-planet" title="Pluto" aria-label="Select Pluto">
           <div class="thumb-dot" style="background: #c4b5a0; --dot-color: #c4b5a0;"></div>
           <span>Pluto</span>
         </button>
-        <button class="planet-thumb" data-planet="haumea" title="Haumea" aria-label="Select Haumea">
+        <button class="planet-thumb" data-planet="haumea" data-body-type="dwarf-planet" title="Haumea" aria-label="Select Haumea">
           <div class="thumb-dot" style="background: #d0c8c0; --dot-color: #d0c8c0;"></div>
           <span>Haumea</span>
         </button>
-        <button class="planet-thumb" data-planet="makemake" title="Makemake" aria-label="Select Makemake">
+        <button class="planet-thumb" data-planet="makemake" data-body-type="dwarf-planet" title="Makemake" aria-label="Select Makemake">
           <div class="thumb-dot" style="background: #c8a882; --dot-color: #c8a882;"></div>
           <span>Makemake</span>
         </button>
-        <button class="planet-thumb" data-planet="eris" title="Eris" aria-label="Select Eris">
+        <button class="planet-thumb" data-planet="eris" data-body-type="dwarf-planet" title="Eris" aria-label="Select Eris">
           <div class="thumb-dot" style="background: #b8b8c8; --dot-color: #b8b8c8;"></div>
           <span>Eris</span>
         </button>
@@ -227,28 +243,30 @@
         <span data-i18n="nav.asteroids">Asteroids</span>
       </button>
       <div class="asteroid-submenu body-submenu hidden" id="asteroid-submenu">
-        <button class="planet-thumb" data-planet="vesta" title="Vesta" aria-label="Select Vesta">
+        <button class="planet-thumb" data-planet="vesta" data-body-type="asteroid" title="Vesta" aria-label="Select Vesta">
           <div class="thumb-dot" style="background: #a09888; --dot-color: #a09888;"></div>
           <span>Vesta</span>
         </button>
-        <button class="planet-thumb" data-planet="pallas" title="Pallas" aria-label="Select Pallas">
+        <button class="planet-thumb" data-planet="pallas" data-body-type="asteroid" title="Pallas" aria-label="Select Pallas">
           <div class="thumb-dot" style="background: #7a7a80; --dot-color: #7a7a80;"></div>
           <span>Pallas</span>
         </button>
-        <button class="planet-thumb" data-planet="hygiea" title="Hygiea" aria-label="Select Hygiea">
+        <button class="planet-thumb" data-planet="hygiea" data-body-type="asteroid" title="Hygiea" aria-label="Select Hygiea">
           <div class="thumb-dot" style="background: #555560; --dot-color: #555560;"></div>
           <span>Hygiea</span>
         </button>
-        <button class="planet-thumb" data-planet="juno" title="Juno" aria-label="Select Juno">
+        <button class="planet-thumb" data-planet="juno" data-body-type="asteroid" title="Juno" aria-label="Select Juno">
           <div class="thumb-dot" style="background: #b0a090; --dot-color: #b0a090;"></div>
           <span>Juno</span>
         </button>
-        <button class="planet-thumb" data-planet="eros" title="Eros" aria-label="Select Eros">
+        <button class="planet-thumb" data-planet="eros" data-body-type="asteroid" title="Eros" aria-label="Select Eros">
           <div class="thumb-dot" style="background: #c8a878; --dot-color: #c8a878;"></div>
           <span>Eros</span>
         </button>
       </div>
     </div>
+    <!-- UX-1: Scroll hint chevron, hidden once user scrolls to end -->
+    <button class="planet-bar-scroll-hint" id="planet-bar-scroll-hint" aria-hidden="true" tabindex="-1">&#xbb;</button>
   </div>
 
   <!-- Info panel (slides in on planet click) -->
@@ -286,6 +304,12 @@
 
   <!-- Tooltip -->
   <div id="tooltip" class="hidden" aria-live="polite"></div>
+
+  <!-- Screen reader live region for dynamic announcements -->
+  <div id="sr-announcer" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+
+  <!-- Persistent help/tutorial button -->
+  <button id="btn-help" class="help-btn" title="Restart tutorial" aria-label="Restart tutorial">?</button>
 
   <script type="module" src="/src/main.js"></script>
 </body>

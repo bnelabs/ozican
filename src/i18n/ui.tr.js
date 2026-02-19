@@ -11,6 +11,7 @@ export const ui_tr = {
   'loading.timeout': 'Beklenenden uzun sürüyor...',
 
   // Nav buttons
+  'nav.timeSpeed': 'Zaman hızı',
   'nav.overview': 'Genel Bakış',
   'nav.compare': 'Karşılaştır',
   'nav.speed': 'Hız',
@@ -172,7 +173,7 @@ export const ui_tr = {
   'attr.neon': 'Neon',
 
   // Info panel toggle
-  'info.showMore': 'Daha fazla',
+  'info.showMore': 'Daha fazlası',
   'info.showLess': 'Daha az',
 
   // Cross-section / Cutaway
@@ -335,4 +336,15 @@ export const ui_tr = {
   'quiz.cat.astronomy': 'Astronomi',
   'aria.quiz': 'Astrofizik Quizi',
   'aria.closeQuiz': 'Quiz panelini kapat',
+
+  // Accessibility announcements (I18N-3)
+  'a11y.nowViewing': 'Şu anda görüntüleniyor',
+  'aria.canvas3dDefault': '3D Güneş Sistemi — gezegen çubuğunu kullanarak bir cisim seçin',
+  'aria.canvas3dViewing': '3D Güneş Sistemi — şu anda görüntüleniyor',
+  'aria.canvas3dSuffix': '. Başka bir cisim seçmek için gezegen çubuğunu kullanın.',
+
+  // Error / feedback messages (I18N-3)
+  'error.panelRender': 'Bu içerik görüntülenirken bir hata oluştu.',
+  'error.offline': 'İnternet bağlantısı yok — bazı özellikler kullanılamayabilir.',
+  'audio.resumeHint': 'Sesi etkinleştirmek için tıklayın',
 };

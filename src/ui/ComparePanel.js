@@ -3,6 +3,7 @@
  */
 import { getLocalizedComparisonData } from '../i18n/localizedData.js';
 import { t } from '../i18n/i18n.js';
+import { escapeHTML } from '../utils/sanitize.js';
 
 /** Convert THREE.js Color hex int to CSS hex string */
 function colorToHex(c) {
@@ -42,16 +43,16 @@ export function renderCompareTable() {
       <tr>
         <td class="planet-name">
           <span class="compare-planet-dot" style="background: ${hex}; width: ${dotSize}px; height: ${dotSize}px;"></span>
-          ${planet.name}
+          ${escapeHTML(planet.name)}
         </td>
-        <td>${planet.type}</td>
-        <td>${planet.diameter}</td>
-        <td>${planet.mass}</td>
-        <td>${planet.gravity}</td>
-        <td>${planet.dayLength}</td>
-        <td>${planet.year}</td>
-        <td>${planet.moons > 0 ? planet.moons + ' ' + t('compare.known') : '0'}</td>
-        <td>${planet.temperature}</td>
+        <td>${escapeHTML(planet.type)}</td>
+        <td>${escapeHTML(planet.diameter)}</td>
+        <td>${escapeHTML(planet.mass)}</td>
+        <td>${escapeHTML(planet.gravity)}</td>
+        <td>${escapeHTML(planet.dayLength)}</td>
+        <td>${escapeHTML(planet.year)}</td>
+        <td>${planet.moons > 0 ? escapeHTML(String(planet.moons)) + ' ' + escapeHTML(t('compare.known')) : '0'}</td>
+        <td>${escapeHTML(planet.temperature)}</td>
       </tr>`;
   }
 
@@ -77,19 +78,19 @@ export function renderCompareCards() {
         <div class="compare-card-header" style="background: linear-gradient(135deg, ${hex}22 0%, transparent 60%);">
           <span class="compare-planet-dot" style="background: ${hex}; width: ${dotSize}px; height: ${dotSize}px;"></span>
           <div>
-            <div class="planet-name">${planet.name}</div>
-            <div class="planet-type">${planet.type}</div>
+            <div class="planet-name">${escapeHTML(planet.name)}</div>
+            <div class="planet-type">${escapeHTML(planet.type)}</div>
           </div>
         </div>
         <div class="compare-card-grid">
-          <div class="compare-card-stat"><div class="label">${t('compare.diameter')}</div><div class="value">${planet.diameter}</div></div>
-          <div class="compare-card-stat"><div class="label">${t('compare.mass')}</div><div class="value">${planet.mass}</div></div>
-          <div class="compare-card-stat"><div class="label">${t('compare.gravity')}</div><div class="value">${planet.gravity}</div></div>
-          <div class="compare-card-stat"><div class="label">${t('compare.day')}</div><div class="value">${planet.dayLength}</div></div>
-          <div class="compare-card-stat"><div class="label">${t('compare.year')}</div><div class="value">${planet.year}</div></div>
-          <div class="compare-card-stat"><div class="label">${t('compare.moons')}</div><div class="value">${planet.moons > 0 ? planet.moons + ' ' + t('compare.known') : '0'}</div></div>
-          <div class="compare-card-stat"><div class="label">${t('compare.temp')}</div><div class="value">${planet.temperature}</div></div>
-          <div class="compare-card-stat"><div class="label">${t('compare.distance')}</div><div class="value">${planet.distance}</div></div>
+          <div class="compare-card-stat"><div class="label">${t('compare.diameter')}</div><div class="value">${escapeHTML(planet.diameter)}</div></div>
+          <div class="compare-card-stat"><div class="label">${t('compare.mass')}</div><div class="value">${escapeHTML(planet.mass)}</div></div>
+          <div class="compare-card-stat"><div class="label">${t('compare.gravity')}</div><div class="value">${escapeHTML(planet.gravity)}</div></div>
+          <div class="compare-card-stat"><div class="label">${t('compare.day')}</div><div class="value">${escapeHTML(planet.dayLength)}</div></div>
+          <div class="compare-card-stat"><div class="label">${t('compare.year')}</div><div class="value">${escapeHTML(planet.year)}</div></div>
+          <div class="compare-card-stat"><div class="label">${t('compare.moons')}</div><div class="value">${planet.moons > 0 ? escapeHTML(String(planet.moons)) + ' ' + escapeHTML(t('compare.known')) : '0'}</div></div>
+          <div class="compare-card-stat"><div class="label">${t('compare.temp')}</div><div class="value">${escapeHTML(planet.temperature)}</div></div>
+          <div class="compare-card-stat"><div class="label">${t('compare.distance')}</div><div class="value">${escapeHTML(planet.distance)}</div></div>
         </div>
       </div>`;
   }
@@ -109,8 +110,8 @@ function renderSizeBar(data, maxR) {
     const widthPct = Math.max(2, (planet.displayRadius / maxR) * 100);
     html += `
       <div class="compare-size-item">
-        <div class="compare-size-fill" style="width: ${widthPct}%; background: ${hex};" title="${planet.name}"></div>
-        <span class="compare-size-label">${planet.name}</span>
+        <div class="compare-size-fill" style="width: ${widthPct}%; background: ${hex};" title="${escapeHTML(planet.name)}"></div>
+        <span class="compare-size-label">${escapeHTML(planet.name)}</span>
       </div>`;
   }
   html += '</div>';

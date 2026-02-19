@@ -1,3 +1,37 @@
+/* ===== Accessibility Utilities ===== */
+
+/* Skip link — visible only on focus */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 0;
+  z-index: 100000;
+  padding: 12px 20px;
+  background: var(--accent, #4a9eff);
+  color: #fff;
+  font-weight: 600;
+  font-size: 1rem;
+  text-decoration: none;
+  border-radius: 0 0 8px 0;
+  transition: top 0.2s;
+}
+.skip-link:focus {
+  top: 0;
+}
+
+/* Visually hidden but accessible to screen readers */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ===== Reset & Base ===== */
 *, *::before, *::after {
   margin: 0;
@@ -12,7 +46,7 @@
   --bg-glass: rgba(10, 10, 18, 0.6);
   --text-primary: #e8e8f0;
   --text-secondary: #9898b0;
-  --text-muted: #7a7a9a;
+  --text-muted: #9898b8; /* Lightened from #7a7a9a for WCAG AA contrast on dark bg */
   --accent: #4a9eff;
   --accent-glow: rgba(74, 158, 255, 0.3);
   --gold: #ffd700;
@@ -374,6 +408,14 @@ body.nav-sheet-open::after {
   opacity: 0.5;
 }
 
+/* UX-7: Speed label — hidden on desktop, shown below speed button on mobile */
+.speed-mobile-label {
+  display: none;
+  font-size: 0.6rem;
+  opacity: 0.6;
+  letter-spacing: 0.04em;
+}
+
 .nav-btn {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -582,6 +624,24 @@ body.nav-sheet-open::after {
 .planet-thumb span {
   opacity: 0.7;
   transition: opacity var(--transition);
+}
+
+/* UX-5: Visual hierarchy by body type */
+.planet-thumb[data-body-type="dwarf-planet"] {
+  font-size: 0.65rem;
+  opacity: 0.85;
+}
+.planet-thumb[data-body-type="dwarf-planet"] .thumb-dot {
+  width: 18px;
+  height: 18px;
+}
+.planet-thumb[data-body-type="asteroid"] {
+  font-size: 0.62rem;
+  opacity: 0.75;
+}
+.planet-thumb[data-body-type="asteroid"] .thumb-dot {
+  width: 14px;
+  height: 14px;
 }
 
 .planet-thumb:hover span,
@@ -794,6 +854,33 @@ body.nav-sheet-open::after {
 #planet-bar.scroll-left::before { opacity: 1; }
 #planet-bar.scroll-right::after { opacity: 1; }
 
+/* UX-1: Scroll hint chevron — pulses 3 times on first load */
+@keyframes scroll-hint-pulse {
+  0%, 100% { opacity: 0.7; transform: translateY(-50%) translateX(0); }
+  50%       { opacity: 1;   transform: translateY(-50%) translateX(4px); }
+}
+
+.planet-bar-scroll-hint {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 1.2rem;
+  cursor: pointer;
+  pointer-events: none;
+  padding: 0 2px;
+  line-height: 1;
+  animation: scroll-hint-pulse 0.6s ease-in-out 3;
+  z-index: 2;
+}
+
+.planet-bar-scroll-hint.hidden {
+  display: none;
+}
+
 /* ===== Info Panel — Mobile: compact bottom sheet ===== */
 #info-panel {
   position: fixed;
@@ -958,6 +1045,13 @@ body.nav-sheet-open::after {
   color: var(--text-primary);
 }
 
+/* UX-4: Pulse glow animation for first-open expand button */
+@keyframes btn-pulse-glow {
+  0%   { box-shadow: 0 0 0 0 rgba(74, 158, 255, 0.5); }
+  60%  { box-shadow: 0 0 0 8px rgba(74, 158, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(74, 158, 255, 0); }
+}
+
 .info-toggle-btn {
   background: rgba(74, 158, 255, 0.08);
   border: 1px solid rgba(74, 158, 255, 0.2);
@@ -970,11 +1064,58 @@ body.nav-sheet-open::after {
   cursor: pointer;
   transition: var(--transition);
   align-self: flex-start;
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.info-toggle-btn.pulse-first {
+  animation: btn-pulse-glow 0.8s ease-out 3;
 }
 
 .info-toggle-btn:hover {
   background: rgba(74, 158, 255, 0.15);
   border-color: rgba(74, 158, 255, 0.4);
+}
+
+/* UX-2: Persistent help button */
+.help-btn {
+  position: fixed;
+  bottom: calc(var(--safe-bottom) + 80px);
+  right: calc(var(--safe-right) + 16px);
+  z-index: 500;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(74, 158, 255, 0.15);
+  border: 1px solid rgba(74, 158, 255, 0.35);
+  color: var(--accent);
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+  backdrop-filter: blur(8px);
+}
+.help-btn:hover {
+  background: rgba(74, 158, 255, 0.28);
+  border-color: rgba(74, 158, 255, 0.6);
+  transform: scale(1.08);
+}
+.help-btn:active {
+  transform: scale(0.95);
+}
+
+/* Panel error boundary fallback */
+.panel-error {
+  padding: var(--space-4);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  border: 1px solid rgba(255, 100, 100, 0.2);
+  border-radius: var(--radius);
+  background: rgba(255, 60, 60, 0.05);
 }
 
 /* Info panel sections */
@@ -1982,12 +2123,19 @@ kbd {
   .nav-controls .nav-group .nav-btn {
     width: auto;
     justify-content: center;
+    align-items: center;
+    flex-direction: column;
     min-height: 34px;
     font-size: 0.74rem;
     padding: var(--space-1) var(--space-2);
     border-radius: calc(var(--radius-pill) - 2px);
     background: transparent;
     border: none;
+  }
+
+  /* UX-7: show time-speed sub-label in bottom nav bar */
+  .speed-mobile-label {
+    display: block;
   }
 
   .nav-divider {
@@ -2228,6 +2376,15 @@ kbd {
   color: var(--text-primary);
 }
 
+/* RES-4: mission HUD fallback for trajectory errors */
+.mission-hud-error {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: var(--space-2) 0;
+  padding: 0 var(--space-1);
+}
+
 /* Timeline scrubber */
 .timeline-scrubber {
   position: relative;
@@ -2244,6 +2401,13 @@ kbd {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 2px;
   cursor: pointer;
+}
+
+/* A11Y-5: keyboard focus ring for slider */
+.timeline-track:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 6px;
+  border-radius: 4px;
 }
 
 .timeline-fill {
@@ -2598,11 +2762,30 @@ kbd {
 }
 
 .quiz-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--space-3);
+}
+
+.quiz-progress-bar {
+  width: 100%;
+  height: 4px;
+  appearance: none;
+  border: none;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.1);
+  overflow: hidden;
+}
+.quiz-progress-bar::-webkit-progress-bar { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.quiz-progress-bar::-webkit-progress-value { background: var(--accent); border-radius: 2px; }
+.quiz-progress-bar::-moz-progress-bar { background: var(--accent); border-radius: 2px; }
+
+.quiz-progress-text {
   font-size: 0.72rem;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  margin-bottom: var(--space-3);
 }
 
 .quiz-question-text {
