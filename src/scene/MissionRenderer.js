@@ -64,26 +64,35 @@ export class MissionRenderer {
     this.curve = new THREE.CatmullRomCurve3(points, false, 'centripetal', 0.3);
     const curvePoints = this.curve.getPoints(400);
 
-    // Trajectory line
+    // Core trajectory line — bright, clearly visible
     const lineGeo = new THREE.BufferGeometry().setFromPoints(curvePoints);
     const lineMat = new THREE.LineBasicMaterial({
       color: new THREE.Color(mission.color),
       transparent: true,
-      opacity: 0.5,
+      opacity: 0.9,
       linewidth: 1,
     });
     this.trajectoryLine = new THREE.Line(lineGeo, lineMat);
     this.trajectoryGroup.add(this.trajectoryLine);
 
-    // Glowing tube around trajectory
-    const tubeGeo = new THREE.TubeGeometry(this.curve, 300, 0.1, 8, false);
+    // Wide outer glow tube — fat enough to read against the black void
+    const tubeGeo = new THREE.TubeGeometry(this.curve, 300, 0.22, 8, false);
     const tubeMat = new THREE.MeshBasicMaterial({
       color: new THREE.Color(mission.color),
       transparent: true,
-      opacity: 0.12,
+      opacity: 0.28,
     });
     const tube = new THREE.Mesh(tubeGeo, tubeMat);
     this.trajectoryGroup.add(tube);
+
+    // Ultra-thin inner bright tube for the glowing core
+    const innerGeo = new THREE.TubeGeometry(this.curve, 300, 0.06, 6, false);
+    const innerMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(mission.color),
+      transparent: true,
+      opacity: 0.65,
+    });
+    this.trajectoryGroup.add(new THREE.Mesh(innerGeo, innerMat));
 
     // Waypoint markers (glowing spheres at flyby positions)
     this.waypointMarkers = [];

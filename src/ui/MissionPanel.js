@@ -16,8 +16,8 @@ export function renderMissionList() {
     const isActive = mission.status.startsWith('Active');
 
     html += `
-      <div class="mission-card" data-mission-id="${escapeHTML(mission.id)}">
-        <div class="mission-card-indicator" style="background: ${mission.color};"></div>
+      <div class="mission-card" data-mission-id="${escapeHTML(mission.id)}" style="--mission-color:${mission.color};">
+        <div class="mission-card-indicator" style="background: ${mission.color}; color: ${mission.color};"></div>
         <div class="mission-card-body">
           <div class="mission-card-header">
             <h3 class="mission-card-name">${escapeHTML(mission.name)}</h3>

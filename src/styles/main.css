@@ -1585,19 +1585,36 @@ body.nav-sheet-open::after {
 .mission-card {
   display: flex;
   gap: var(--space-3);
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) 0;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: var(--transition);
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s, transform 0.15s;
   min-height: 44px;
+  overflow: hidden;
+  position: relative;
+}
+
+.mission-card::before {
+  /* ambient mission-color glow behind the card */
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(ellipse at 10% 50%, var(--mission-color, #4a9eff) 0%, transparent 60%);
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.mission-card:hover::before {
+  opacity: 0.08;
 }
 
 .mission-card:hover {
-  background: rgba(74, 158, 255, 0.06);
-  border-color: rgba(74, 158, 255, 0.2);
-  transform: translateX(4px);
+  border-color: var(--mission-color, rgba(74, 158, 255, 0.35));
+  box-shadow: 0 0 0 1px var(--mission-color, rgba(74, 158, 255, 0.15));
+  transform: translateX(2px);
 }
 
 .mission-card:active {
@@ -1605,9 +1622,10 @@ body.nav-sheet-open::after {
 }
 
 .mission-card-indicator {
-  width: 4px;
-  border-radius: 2px;
+  width: 6px;
+  border-radius: 0 3px 3px 0;
   flex-shrink: 0;
+  box-shadow: 2px 0 12px currentColor;
 }
 
 .mission-card-body {
@@ -1643,14 +1661,21 @@ body.nav-sheet-open::after {
 }
 
 .mission-card-status {
-  font-size: 0.68rem;
+  display: inline-block;
+  font-size: 0.62rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   color: var(--text-muted);
+  padding: 2px 7px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
 }
 
 .mission-card-status.active {
   color: #44cc88;
+  border-color: rgba(68,204,136,0.3);
+  background: rgba(68,204,136,0.06);
 }
 
 .mission-card-status.ended {
@@ -1726,21 +1751,22 @@ body.nav-sheet-open::after {
 }
 
 .timeline-dot {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   flex-shrink: 0;
   margin-top: 2px;
-  box-shadow: 0 0 8px currentColor;
+  box-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
+  border: 2px solid rgba(255,255,255,0.15);
 }
 
 .timeline-line {
   position: absolute;
-  left: 5px;
-  top: 16px;
+  left: 6px;
+  top: 18px;
   bottom: 0;
   width: 2px;
-  background: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(to bottom, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.05) 100%);
 }
 
 .timeline-content {
@@ -3706,7 +3732,25 @@ kbd {
 
 #dedication-screen.fade-out {
   opacity: 0;
-  transition: opacity 1s ease;
+  transition: opacity 0.6s ease;
+}
+
+/* ♡ Dedication link in nav brand */
+.dedication-link {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.28);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: color 0.2s;
+  line-height: 1;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+.dedication-link:hover {
+  color: rgba(255,200,200,0.7);
 }
 
 .dedication-bg {
@@ -4414,13 +4458,13 @@ kbd {
    ============================================ */
 
 .launch-countdown {
-  position: absolute;
+  position: fixed;
   inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: 10001;
   background: radial-gradient(ellipse at center, #0a0a1a 0%, #000005 100%);
   opacity: 0;
   pointer-events: none;
@@ -4471,4 +4515,41 @@ kbd {
   20% { transform: scale(1); opacity: 1; }
   80% { transform: scale(1); opacity: 1; }
   100% { transform: scale(0.85); opacity: 0; }
+}
+
+/* ===== Small-phone (≤ 390px iPhone SE / iPhone 12 mini) ===== */
+@media (max-width: 390px) {
+  /* Lang picker: buttons stack vertically on tiny screens */
+  .lang-picker-options {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .lang-picker-btn {
+    min-width: 0;
+    padding: 20px 24px;
+    flex-direction: row;
+    justify-content: center;
+  }
+
+  /* Reduce nav brand text to avoid overflow */
+  .brand-name {
+    font-size: 1rem;
+  }
+  .brand-subtitle,
+  .brand-tagline {
+    display: none !important;
+  }
+
+  /* Make dedication content fit small screens */
+  .dedication-content {
+    padding: var(--space-4);
+  }
+  .dedication-heading {
+    font-size: 1.1rem;
+    letter-spacing: 2px;
+  }
+  .dedication-text {
+    font-size: 0.88rem;
+  }
 }

@@ -775,102 +775,47 @@ async function runLaunchCountdown() {
   el.style.opacity = '';
 }
 
-async function showDedication() {
-  dedicationScreen.classList.remove('hidden');
-
-  // Run launch countdown before showing dedication content
-  await runLaunchCountdown();
-
-  // Try to play dedication music (lightweight HTML5 audio, not AudioManager)
-  try {
-    dedicationAudio = new Audio('/audio/contemplative.mp3');
-    dedicationAudio.loop = true;
-    dedicationAudio.volume = 0;
-    const playPromise = dedicationAudio.play();
-    if (playPromise && playPromise.then) {
-      playPromise.then(() => {
-        // Fade volume from 0 to 0.5 over 2 seconds
-        let vol = 0;
-        const fadeIn = setInterval(() => {
-          vol = Math.min(vol + 0.025, 0.5);
-          if (dedicationAudio) dedicationAudio.volume = vol;
-          if (vol >= 0.5) clearInterval(fadeIn);
-        }, 100);
-      }).catch(() => {
-        // Autoplay blocked — start on first user interaction
-        const startOnInteraction = () => {
-          if (dedicationAudio) {
-            dedicationAudio.play().catch(() => {});
-            let vol = 0;
-            const fadeIn = setInterval(() => {
-              vol = Math.min(vol + 0.025, 0.5);
-              if (dedicationAudio) dedicationAudio.volume = vol;
-              if (vol >= 0.5) clearInterval(fadeIn);
-            }, 100);
-          }
-          dedicationScreen.removeEventListener('click', startOnInteraction);
-          dedicationScreen.removeEventListener('touchstart', startOnInteraction);
-        };
-        dedicationScreen.addEventListener('click', startOnInteraction, { once: true });
-        dedicationScreen.addEventListener('touchstart', startOnInteraction, { once: true });
-      });
-    }
-  } catch {
-    // Audio not available — continue silently
+/** Open dedication modal from the nav ♡ link. */
+function showDedication() {
+  if (dedicationScreen.classList.contains('hidden')) {
+    // Re-trigger verse animations so they replay each time
+    const verses = dedicationScreen.querySelectorAll(
+      '.dedication-verse, .dedication-heading, .dedication-signature');
+    verses.forEach(el => {
+      el.style.animation = 'none';
+      void el.offsetWidth;
+      el.style.animation = '';
+    });
+    dedicationScreen.classList.remove('hidden');
+    dedicationSkip.focus();
   }
-
-  // Auto-complete after poem animation (~12s)
-  const autoTimer = setTimeout(endDedication, 12000);
-
-  dedicationSkip.addEventListener('click', () => {
-    _countdownCancelled = true;
-    clearTimeout(autoTimer);
-    endDedication();
-  });
 }
 
 function endDedication() {
   if (dedicationScreen.classList.contains('hidden')) return;
-  _countdownCancelled = true;
-
-  // Init AudioContext synchronously within user gesture (skip button click)
-  // so browsers allow autoplay in the subsequent startApp() call
-  audioManager.init();
-
-  // Fade out dedication audio
-  if (dedicationAudio) {
-    const fadeAudio = dedicationAudio;
-    let vol = fadeAudio.volume;
-    const fadeOut = setInterval(() => {
-      vol = Math.max(vol - 0.05, 0);
-      fadeAudio.volume = vol;
-      if (vol <= 0) {
-        clearInterval(fadeOut);
-        fadeAudio.pause();
-        fadeAudio.src = '';
-      }
-    }, 50);
-    dedicationAudio = null;
-  }
-
   dedicationScreen.classList.add('fade-out');
-  storageSet(DEDICATION_KEY, '1');
   setTimeout(() => {
     dedicationScreen.classList.add('hidden');
     dedicationScreen.classList.remove('fade-out');
-    if (storageGet(LANG_STORAGE_KEY)) {
-      initLang();
-      startApp();
-    } else {
-      showLangPicker();
-    }
-  }, 1000);
+  }, 600);
 }
 
 // ==================== Boot ====================
 
-// Boot — dedication plays on every page load
-showDedication();
+// Boot: countdown → lang picker (or startApp if lang already set).
+// Dedication lives behind the ♡ nav link — not shown at boot.
+(async function boot() {
+  await runLaunchCountdown();
+  if (storageGet(LANG_STORAGE_KEY)) {
+    initLang();
+    startApp();
+  } else {
+    showLangPicker();
+  }
+})();
+
+document.getElementById('btn-dedication')?.addEventListener('click', showDedication);
+dedicationSkip.addEventListener('click', endDedication);
 
 // ==================== Planet Labels ====================
 

@@ -28,15 +28,17 @@
     <div id="canvas-container" role="img" aria-label="3D Solar System — use the planet bar below to select a body"></div>
   </main>
 
-  <!-- Dedication screen (first visit) -->
-  <div id="dedication-screen" class="hidden">
-    <div class="launch-countdown" id="launch-countdown" aria-hidden="true">
-      <div class="countdown-display">
-        <div class="countdown-number" id="countdown-num">3</div>
-        <div class="countdown-label">T-MINUS</div>
-      </div>
-      <div class="countdown-status" id="countdown-status">ALL SYSTEMS GO</div>
+  <!-- Launch countdown (standalone — runs at every boot) -->
+  <div class="launch-countdown" id="launch-countdown" aria-hidden="true">
+    <div class="countdown-display">
+      <div class="countdown-number" id="countdown-num">3</div>
+      <div class="countdown-label">T-MINUS</div>
     </div>
+    <div class="countdown-status" id="countdown-status">ALL SYSTEMS GO</div>
+  </div>
+
+  <!-- Dedication screen (accessible via nav link — not shown at boot) -->
+  <div id="dedication-screen" class="hidden" role="dialog" aria-modal="true" aria-label="Dedication">
     <div class="dedication-bg"></div>
     <div class="dedication-content">
       <h2 class="dedication-heading">To the Infinite and the Intimate</h2>
@@ -50,7 +52,7 @@
       </div>
       <div class="dedication-signature">— Ozan</div>
     </div>
-    <button class="dedication-skip" id="dedication-skip">Skip</button>
+    <button class="dedication-skip" id="dedication-skip" aria-label="Close dedication">&#10005;</button>
   </div>
 
   <!-- Language picker (first visit) -->
@@ -92,6 +94,7 @@
       <span class="brand-name">OzMos</span>
       <span class="brand-subtitle" data-i18n="brand.subtitle">Where Ozan Meets the Cosmos</span>
       <span class="brand-tagline" data-i18n="brand.tagline">Solar System Explorer</span>
+      <button id="btn-dedication" class="dedication-link" title="Dedication" aria-label="Dedication">♡</button>
     </div>
 
     <!-- Collapsible nav controls (hidden on mobile, inline on desktop) -->
