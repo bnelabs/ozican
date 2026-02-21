@@ -20,12 +20,12 @@ function getTextureQuality() {
 
 export const TEXTURE_QUALITY = getTextureQuality();
 
-/** High-res 4K texture paths (must be downloaded separately from NASA). */
+/** High-res 4K texture paths — only list files that actually exist. */
 export const HIGH_RES_TEXTURES = {
-  earth: '/textures/4k/earth_4k.jpg',
-  mars: '/textures/4k/mars_4k.jpg',
-  moon: '/textures/4k/moon_4k.jpg',
-  jupiter: '/textures/4k/jupiter_4k.jpg',
+  earth:   '/textures/4k/earth_4k.jpg',    // 3MB  @ 8192×4096 (NASA Blue Marble)
+  mercury: '/textures/4k/mercury_4k.jpg',  // 15MB @ 8192×4096 (Solar System Scope)
+  venus:   '/textures/4k/venus_4k.jpg',    // 12MB @ 8192×4096 (Solar System Scope)
+  // mars, moon, jupiter: 2K files in /textures/ are already max available quality
 };
 
 /**

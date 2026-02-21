@@ -451,11 +451,15 @@ export class CrossSectionViewer {
     this._starfield      = null;
     this._coreLight      = null;
 
-    // Camera intro zoom vectors (reused every frame — no GC)
-    // Camera positioned at +z,+x angle: sees LEFT hemisphere exterior dome (from +z)
-    // AND the face disc at x=0.002 through the cut opening (right side removed).
-    this._camStart = new THREE.Vector3(2.5, 1.0, 5.0);
-    this._camEnd   = new THREE.Vector3(0.8, 0.6, 2.5);
+    // Camera: angled from upper-front so Y-axis layer burst is visible as vertical spread.
+    // +x offset keeps the cut face visible; elevated Y shows the exploded layers from above.
+    this._camStart = new THREE.Vector3(3.0, 2.8, 4.5);
+    this._camEnd   = new THREE.Vector3(1.3, 2.0, 3.5);
+
+    // Burst animation state (populated in _buildGeometry when layer count is known)
+    this._burstTargets  = [];  // final Y position per layer
+    this._burstCurrentY = [];  // current interpolated Y per layer
+    this._burstCenterY  = 0;   // midpoint of exploded stack, for camera lookAt
 
     // Color dot indicators (replacing numbered badges)
     this._colorDots = [];
@@ -691,6 +695,13 @@ export class CrossSectionViewer {
     this._expandTarget  = new Array(this._layerMeshes.length).fill(0);
     this._expandCurrent = new Array(this._layerMeshes.length).fill(0);
 
+    // Burst: outer layers drift upward, innermost stays at y=0.
+    // spacing 0.30 gives ~0.9 spread for 4 layers, ~1.5 for 6 layers.
+    const _nL = this._layerMeshes.length;
+    this._burstTargets  = Array.from({ length: _nL }, (_, i) => (_nL - 1 - i) * 0.30);
+    this._burstCurrentY = new Array(_nL).fill(0);
+    this._burstCenterY  = (_nL > 1) ? ((_nL - 1) * 0.30) / 2 : 0;
+
     // ── Cut-face disc ──
     // Full circle at x=0.002, facing +X (toward camera).
     // MeshBasicMaterial — ignores lighting, always shows texture at full brightness.
@@ -746,37 +757,30 @@ export class CrossSectionViewer {
     const delta   = Math.min((now - this._lastFrameTime) * 0.001, 0.05);
     this._lastFrameTime = now;
 
-    // ── Phase 1: sphere scales in (0.15 → 0.85 s), ease-out-back overshoot ──
-    const scaleT = Math.min(Math.max((elapsed - 0.15) / 0.70, 0), 1);
+    // ── Phase 1: sphere scales in (0 → 0.4 s), ease-out-back overshoot ──
+    const scaleT = Math.min(Math.max(elapsed / 0.4, 0), 1);
     if (this._sphereGroup) {
       this._sphereGroup.scale.setScalar(this._easeOutBack(scaleT));
     }
 
-    // ── Phase 2: knife-cut sweeps from right edge to centre (0.85 → 2.5 s) ──
-    // Clip constant goes 1.5 → 0: looks like a blade slicing through the planet.
-    const cutT      = Math.min(Math.max((elapsed - 0.85) / 1.65, 0), 1);
+    // ── Phase 2: quick clip sweep (0.4 → 1.2 s) ──
+    // Clip constant 1.5 → 0: exposes the cut face. Fast 0.8 s sweep.
+    const cutT      = Math.min(Math.max((elapsed - 0.4) / 0.8, 0), 1);
     const clipConst = 1.5 * (1 - this._easeOutCubic(cutT));
     if (this._clipPlane1) this._clipPlane1.constant = clipConst;
 
     // ── Phase 2b: per-layer reveal flash ──
-    // Clip plane: Plane((-1,0,0), c) clips x > c, c: 1.5→0.
-    // c = 1.5*(1 - easeOutCubic(cutT)).
-    // Layer at normalised radius r is first cut when c = r.
-    // Solving: r = 1.5*(1-easeOut(t)) → easeOut(t) = 1-r/1.5
-    //   → t = 1 - (r/1.5)^(1/3)   (exact easeOutCubic inverse)
-    // Outer layers (r≈1) flash first (t≈0), inner last (t closer to 1).
     if (this._activeLayerIndex < 0 && this._currentLayers) {
       const maxR = this._currentLayers[0].r;
       for (let i = 0; i < this._layerMeshes.length; i++) {
         const normR      = this._currentLayers[i].r / maxR;
-        const revealCutT = Math.max(0, 1 - Math.pow(normR / 1.5, 1 / 3)); // exact inverse
-        const postReveal = cutT - revealCutT; // >0 after reveal
+        const revealCutT = Math.max(0, 1 - Math.pow(normR / 1.5, 1 / 3));
+        const postReveal = cutT - revealCutT;
         const mat        = this._layerMeshes[i].material;
         const base       = mat.userData.baseEmissive;
-        if (postReveal >= 0 && postReveal < 0.28) {
-          // brief emissive flash for ~0.28 s after the layer is first exposed
-          const flashT = postReveal / 0.28;
-          const boost  = 4.5 * Math.sin(flashT * Math.PI);
+        if (postReveal >= 0 && postReveal < 0.25) {
+          const flashT = postReveal / 0.25;
+          const boost  = 5.0 * Math.sin(flashT * Math.PI);
           mat.emissive = base.clone().multiplyScalar(1 + boost);
         } else {
           mat.emissive = base.clone();
@@ -785,32 +789,66 @@ export class CrossSectionViewer {
       }
     }
 
-    // ── Phase 3: sidebar rows slide in staggered (1.0 s + 0.12 s per row) ──
+    // ── Phase 3: Y-axis burst — layers drift upward in staggered sequence (1.2 → 3.2 s) ──
+    // Outermost layer (index 0) moves highest; innermost core stays at y=0.
+    // Each layer starts moving 0.12 s after the one below it.
+    if (this._burstTargets && this._burstCurrentY) {
+      for (let i = 0; i < this._layerMeshes.length; i++) {
+        const burstStart   = 1.2 + i * 0.12;
+        const burstElapsed = Math.max(0, elapsed - burstStart);
+        const burstT       = Math.min(burstElapsed / 1.2, 1);
+        const targetY      = this._burstTargets[i] * this._easeOutBack(burstT);
+        this._burstCurrentY[i] += (targetY - this._burstCurrentY[i]) * 0.12;
+
+        this._layerMeshes[i].position.y = this._burstCurrentY[i];
+        // Boundary rings and face disc follow their layer
+        if (this._boundaryRings[i]) {
+          this._boundaryRings[i].position.y = this._burstCurrentY[i];
+        }
+      }
+      // Face disc sits at the innermost layer (y=0 — core stays put)
+      // It shows the full concentric cross-section at ground level.
+    }
+
+    // ── Phase 3b: sidebar rows appear as each layer reaches its burst position ──
     for (let i = 0; i < this._rowEls.length; i++) {
-      if (elapsed >= 1.0 + i * 0.12) {
+      if (elapsed >= 1.6 + i * 0.15) {
         this._rowEls[i].classList.add('visible');
       }
     }
 
-    // ── Idle: NO sphere rotation — face disc must stay aligned with cut plane ──
-    // (clip plane is in world space; rotating the sphere would offset the face disc)
-
-    // ── Core light: fades in with the cut, then pulses gently ──
+    // ── Core light: fades in with cut, pulses gently after burst settles ──
     if (this._coreLight) {
       const base  = cutT * 1.6;
-      const pulse = elapsed > 2.5 ? Math.sin(elapsed * 1.2) * 0.35 : 0;
+      const pulse = elapsed > 3.2 ? Math.sin(elapsed * 1.2) * 0.35 : 0;
       this._coreLight.intensity = base + pulse;
     }
 
-    // ── Camera intro zoom: ease from far (start) → close (end) over 1.5 s ──
+    // ── Camera: zoom in (0–1.5 s), track burst center (1.5–3.5 s), orbit (3.5 s+) ──
     if (this._camera) {
-      const camT = this._easeOutCubic(Math.min(elapsed / 1.5, 1.0));
-      this._camera.position.lerpVectors(this._camStart, this._camEnd, camT);
-      this._camera.lookAt(0, -0.05, 0);
+      const bcy = this._burstCenterY || 0;
+      if (elapsed < 1.5) {
+        const camT = this._easeOutCubic(Math.min(elapsed / 1.5, 1.0));
+        this._camera.position.lerpVectors(this._camStart, this._camEnd, camT);
+        this._camera.lookAt(0, 0, 0);
+      } else if (elapsed < 3.5) {
+        // Shift lookAt upward to center of exploding layers
+        const trackT = (elapsed - 1.5) / 2.0;
+        this._camera.lookAt(0, bcy * this._easeOutCubic(trackT), 0);
+      } else {
+        // Slow orbit around Y axis, looking at burst center
+        const r = Math.sqrt(this._camEnd.x ** 2 + this._camEnd.z ** 2);
+        const startAngle = Math.atan2(this._camEnd.x, this._camEnd.z);
+        const angle = startAngle + (elapsed - 3.5) * 0.18;
+        this._camera.position.x = r * Math.sin(angle);
+        this._camera.position.z = r * Math.cos(angle);
+        this._camera.position.y = this._camEnd.y;
+        this._camera.lookAt(0, bcy, 0);
+      }
     }
 
-    // ── Build color dots once after camera + cut have settled ──
-    if (this._colorDots.length === 0 && elapsed > 2.7 && this._currentLayers) {
+    // ── Build color dots once burst has mostly settled ──
+    if (this._colorDots.length === 0 && elapsed > 4.0 && this._currentLayers) {
       this._buildColorDots();
     }
 
