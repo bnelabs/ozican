@@ -12,6 +12,31 @@ import { t } from '../i18n/i18n.js';
 import { trapFocus } from '../utils/focusTrap.js';
 import { makeSwipeDismissible } from '../utils/swipe.js';
 import { escapeHTML } from '../utils/sanitize.js';
+import '../styles/cross-section.css';
+
+// ─── Color-coded layer palette ──────────────────────────────────────────────
+// 7 colors, assigned innermost → outermost (reversed when applied so index 0
+// in the layers array = outermost = last color in the palette).
+const LAYER_COLORS = [
+  '#ff6b35', // innermost (core) - hot orange
+  '#f7c59f', // next layer - warm tan
+  '#efefd0', // pale cream
+  '#04a777', // emerald
+  '#3d9970', // teal green
+  '#7fcdcd', // aqua
+  '#2c7bb6', // outermost (crust/surface) - cool blue
+];
+
+/**
+ * Returns the display color for a layer at `index` within an array of `total` layers.
+ * Outermost (index 0) gets the cool end; innermost gets the hot end.
+ */
+function getLayerColor(index, total) {
+  if (total <= 1) return LAYER_COLORS[0];
+  // Map: index 0 (outermost) → last palette color; index (total-1) (innermost) → first
+  const paletteIdx = Math.round(((total - 1 - index) / (total - 1)) * (LAYER_COLORS.length - 1));
+  return LAYER_COLORS[paletteIdx];
+}
 
 // ─── Layer classification ─────────────────────────────────────────────────────
 
@@ -136,16 +161,17 @@ function generateFaceTexture(layers) {
     ctx.fillStyle = ringGradient(ctx, cx, cy, innerR, r, lt);
     ctx.fill();
 
-    // Bright boundary line (glow + sharp edge)
+    // Color-coded boundary line (glow + sharp edge using palette color)
+    const palColor = getLayerColor(i, layers.length);
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255,240,140,0.22)';
+    ctx.strokeStyle = palColor + '55'; // semi-transparent glow
     ctx.lineWidth = 8;
     ctx.stroke();
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255,250,200,0.95)';
-    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = palColor;
+    ctx.lineWidth = 2.0;
     ctx.stroke();
   }
 
@@ -431,8 +457,8 @@ export class CrossSectionViewer {
     this._camStart = new THREE.Vector3(2.5, 1.0, 5.0);
     this._camEnd   = new THREE.Vector3(0.8, 0.6, 2.5);
 
-    // Numbered layer badges
-    this._badges = [];
+    // Color dot indicators (replacing numbered badges)
+    this._colorDots = [];
 
     // State
     this._disposed         = true;
@@ -530,9 +556,9 @@ export class CrossSectionViewer {
     this._expandTarget  = [];
     this._expandCurrent = [];
 
-    // Remove all badge elements
-    for (const b of this._badges) b.remove();
-    this._badges = [];
+    // Remove all color dot elements
+    for (const d of this._colorDots) d.remove();
+    this._colorDots = [];
 
     if (this._focusTrap)   { this._focusTrap.release();   this._focusTrap = null; }
     if (this._swipeHandle) { this._swipeHandle.release();  this._swipeHandle = null; }
@@ -549,9 +575,25 @@ export class CrossSectionViewer {
   // ─── Three.js scene ─────────────────────────────────────────────────────────
 
   _buildScene(layers) {
-    const w = this._canvas.clientWidth  || Math.round(window.innerWidth  * 0.6);
-    let h = this._canvas.clientHeight || Math.max(window.innerHeight, 400);
-    h = Math.min(h, window.innerHeight - 60);
+    // Responsive canvas sizing — constrain to container
+    const container = document.getElementById('cs-body');
+    const isDesktop = container ? container.offsetWidth >= 768 : window.innerWidth >= 768;
+    let canvasSize;
+    if (isDesktop) {
+      canvasSize = Math.min(
+        container ? container.offsetWidth * 0.52 : window.innerWidth * 0.52,
+        container ? container.offsetHeight - 20 : window.innerHeight - 80,
+        480
+      );
+    } else {
+      canvasSize = Math.min(
+        container ? container.offsetWidth - 16 : window.innerWidth - 16,
+        window.innerHeight * 0.42
+      );
+    }
+    canvasSize = Math.max(canvasSize, 200); // minimum floor
+    const w = canvasSize;
+    let h = canvasSize;
 
     this._renderer = new THREE.WebGLRenderer({
       canvas: this._canvas, antialias: true, alpha: true,
@@ -663,17 +705,14 @@ export class CrossSectionViewer {
     faceMesh.position.x = 0.002;
     this._faceMeshes.push(faceMesh);
 
-    // ── Layer boundary rings (glowing halos on the cut face) ──
+    // ── Layer boundary rings (color-coded halos on the cut face) ──
     // Placed in the YZ plane (rotation.y = PI/2) at x=0.005 — in front of the
     // face disc (x=0.002) so they appear as bright ring outlines.
-    // The clip plane clips x < 0; with position.x=0.005 the torus is fully in
-    // the x≥0 region so no partial-ring artifacts.
+    // Uses the LAYER_COLORS palette for visual cohesion with sidebar cards.
     for (let i = 0; i < layers.length; i++) {
       const radius = layers[i].r / maxR;
-      const col    = new THREE.Color(layers[i].color);
-      col.r = Math.min(1, col.r + 0.45);
-      col.g = Math.min(1, col.g + 0.45);
-      col.b = Math.min(1, col.b + 0.45);
+      const palColor = getLayerColor(i, layers.length);
+      const col = new THREE.Color(palColor);
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(radius, 0.007, 8, 96),
         new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85 }),
@@ -770,14 +809,14 @@ export class CrossSectionViewer {
       this._camera.lookAt(0, -0.05, 0);
     }
 
-    // ── Build numbered badges once after camera + cut have settled ──
-    if (this._badges.length === 0 && elapsed > 2.7 && this._currentLayers) {
-      this._buildBadges();
+    // ── Build color dots once after camera + cut have settled ──
+    if (this._colorDots.length === 0 && elapsed > 2.7 && this._currentLayers) {
+      this._buildColorDots();
     }
 
-    // ── Update badge positions every frame ──
-    if (this._badges.length > 0 && this._renderer && this._camera) {
-      this._updateBadgePositions();
+    // ── Update dot positions every frame ──
+    if (this._colorDots.length > 0 && this._renderer && this._camera) {
+      this._updateDotPositions();
     }
 
     // ── Layer expansion lerp ──
@@ -855,48 +894,41 @@ export class CrossSectionViewer {
     });
   }
 
-  // ─── Numbered layer badges ────────────────────────────────────────────────────
+  // ─── Color dot indicators (replacing numbered badges) ────────────────────────
 
   /**
-   * Creates one absolutely-positioned badge per layer, placed inside #cs-body
-   * (which is position:relative). Badges are numbered 1-N from outermost to
-   * innermost and colored to match the layer. Positions are updated each frame
-   * by _updateBadgePositions().
+   * Creates one color dot per layer boundary, placed inside #cs-body.
+   * Each dot matches the layer's palette color and pulses on hover.
+   * Positions are updated each frame by _updateDotPositions().
    */
-  _buildBadges() {
+  _buildColorDots() {
     if (!this._camera || !this._currentLayers || !this._canvas) return;
     const bodyEl = this._overlay.querySelector('#cs-body');
     if (!bodyEl) return;
 
-    // Remove any stale badges first
-    for (const b of this._badges) b.remove();
-    this._badges = [];
+    for (const d of this._colorDots) d.remove();
+    this._colorDots = [];
 
-    for (let i = 0; i < this._currentLayers.length; i++) {
-      const layer = this._currentLayers[i];
-      const n = i + 1;
+    const total = this._currentLayers.length;
+    for (let i = 0; i < total; i++) {
+      const color = getLayerColor(i, total);
+      const dot = document.createElement('div');
+      dot.className = 'cs-color-dot';
+      dot.style.setProperty('--layer-color', color);
+      bodyEl.appendChild(dot);
+      this._colorDots.push(dot);
 
-      const badge = document.createElement('div');
-      badge.className = 'cs-badge';
-      badge.dataset.layer = String(n);
-      badge.textContent = String(n);
-      badge.style.setProperty('--c', layer.color);
-      bodyEl.appendChild(badge);
-      this._badges.push(badge);
-
-      // Make visible after a short stagger
-      setTimeout(() => badge.classList.add('visible'), 80 + i * 40);
+      setTimeout(() => dot.classList.add('visible'), 80 + i * 40);
     }
 
-    // Set initial positions immediately
-    this._updateBadgePositions();
+    this._updateDotPositions();
   }
 
   /**
    * Projects each ring's top-edge world position to canvas pixel coords and
-   * repositions the badge div. Called every animation frame after badges exist.
+   * repositions the color dot. Called every animation frame after dots exist.
    */
-  _updateBadgePositions() {
+  _updateDotPositions() {
     if (!this._camera || !this._currentLayers || !this._canvas) return;
     const bodyEl = this._overlay.querySelector('#cs-body');
     if (!bodyEl) return;
@@ -908,28 +940,22 @@ export class CrossSectionViewer {
     const maxR   = this._currentLayers[0].r;
     const tmpVec = new THREE.Vector3();
 
-    for (let i = 0; i < this._badges.length; i++) {
+    for (let i = 0; i < this._colorDots.length; i++) {
       const layer = this._currentLayers[i];
       if (!layer) continue;
 
       const r = layer.r / maxR;
-
-      // Project the topmost visible point of the ring (at x=0.006, y=r, z=0)
-      // onto the screen. This is the "12 o'clock" position of the boundary ring.
       tmpVec.set(0.006, r, 0);
       const ndc = tmpVec.clone().project(this._camera);
 
-      // Convert NDC → canvas-local pixels
       const sx = (ndc.x *  0.5 + 0.5) * canvasRect.width;
       const sy = (ndc.y * -0.5 + 0.5) * canvasRect.height;
 
-      // Convert to #cs-body-relative coords (badge container)
       const bx = sx + (canvasRect.left - bodyRect.left);
       const by = sy + (canvasRect.top  - bodyRect.top);
 
-      // Centre the 22×22 badge on the projected point
-      this._badges[i].style.left = `${(bx - 11).toFixed(1)}px`;
-      this._badges[i].style.top  = `${(by - 11).toFixed(1)}px`;
+      this._colorDots[i].style.left = `${(bx - 6).toFixed(1)}px`;
+      this._colorDots[i].style.top  = `${(by - 6).toFixed(1)}px`;
     }
   }
 
@@ -940,72 +966,70 @@ export class CrossSectionViewer {
     this._sidebarList.innerHTML = '';
     this._rowEls = [];
 
-    for (let i = 0; i < layers.length; i++) {
+    const total = layers.length;
+    for (let i = 0; i < total; i++) {
       const layer = layers[i];
-      const n     = i + 1;
+      const color = getLayerColor(i, total);
 
-      const row = document.createElement('button');
-      row.className = 'cs-layer-row';
-      row.type      = 'button';
-      row.setAttribute('aria-label', t(layer.key));
+      const card = document.createElement('button');
+      card.className = 'cs-layer-card';
+      card.type = 'button';
+      card.dataset.layerIdx = String(i);
+      card.style.setProperty('--layer-color', color);
+      card.setAttribute('aria-label', t(layer.key));
 
-      // Numbered badge prefix matching the 3D overlay badge
-      const num = document.createElement('span');
-      num.className = 'cs-layer-num';
-      num.textContent = String(n);
-      num.style.cssText = `background:color-mix(in srgb,${layer.color} 20%,transparent);border:1.5px solid ${layer.color};color:${layer.color};`;
+      const bar = document.createElement('div');
+      bar.className = 'cs-layer-color-bar';
 
-      const dot = document.createElement('span');
-      dot.className = 'cs-layer-dot';
-      dot.style.cssText = `background:${layer.color}; box-shadow:0 0 5px ${layer.color}99;`;
+      const info = document.createElement('div');
+      info.className = 'cs-layer-info';
 
-      const text = document.createElement('span');
-      text.className = 'cs-layer-text';
-
-      const name = document.createElement('span');
-      name.className   = 'cs-layer-name';
+      const name = document.createElement('div');
+      name.className = 'cs-layer-name';
       name.textContent = t(layer.key);
 
-      const comp = document.createElement('span');
-      comp.className   = 'cs-layer-comp';
-      comp.textContent = layer.compositionShort ? t(layer.compositionShort) : '';
+      // Build meta line: temperature + composition + thickness
+      const metaParts = [];
+      if (layer.temperatureRange) metaParts.push(t(layer.temperatureRange));
+      if (layer.compositionShort) metaParts.push(t(layer.compositionShort));
+      if (layer.thickness) metaParts.push(t(layer.thickness));
 
-      const stat = document.createElement('span');
-      stat.className   = 'cs-layer-stat';
-      stat.textContent = layer.thickness ? t(layer.thickness) : (layer.temperatureRange ? t(layer.temperatureRange) : '');
+      const meta = document.createElement('div');
+      meta.className = 'cs-layer-meta';
+      meta.textContent = metaParts.join(' \u00B7 '); // joined with middle dot
 
-      text.append(name, comp, stat);
-      row.append(num, dot, text);
+      info.append(name, meta);
+      card.append(bar, info);
 
       const idx = i;
-      row.addEventListener('click', () => this._onLayerClick(idx));
+      card.addEventListener('click', () => this._onLayerClick(idx));
+      card.addEventListener('mouseenter', () => this._onRowHover(idx, true));
+      card.addEventListener('mouseleave', () => this._onRowHover(idx, false));
 
-      // Hover: pulse matching badge + boost ring emissive
-      row.addEventListener('mouseenter', () => this._onRowHover(idx, true));
-      row.addEventListener('mouseleave', () => this._onRowHover(idx, false));
-
-      this._sidebarList.appendChild(row);
-      this._rowEls.push(row);
+      this._sidebarList.appendChild(card);
+      this._rowEls.push(card);
     }
   }
 
   /** Re-render sidebar labels and open detail card after language change. */
   _refreshLabels() {
     if (!this._currentLayers || !this._sidebarList) return;
-    // Rebuild layer row text content only (keep DOM structure, just update text)
-    const rows = this._sidebarList.querySelectorAll('.cs-layer-row');
+    const cards = this._sidebarList.querySelectorAll('.cs-layer-card');
     this._currentLayers.forEach((layer, i) => {
-      const row = rows[i];
-      if (!row) return;
-      row.setAttribute('aria-label', t(layer.key));
-      const nameEl = row.querySelector('.cs-layer-name');
-      const compEl = row.querySelector('.cs-layer-comp');
-      const statEl = row.querySelector('.cs-layer-stat');
+      const card = cards[i];
+      if (!card) return;
+      card.setAttribute('aria-label', t(layer.key));
+      const nameEl = card.querySelector('.cs-layer-name');
+      const metaEl = card.querySelector('.cs-layer-meta');
       if (nameEl) nameEl.textContent = t(layer.key);
-      if (compEl) compEl.textContent = layer.compositionShort ? t(layer.compositionShort) : '';
-      if (statEl) statEl.textContent = layer.thickness ? t(layer.thickness) : (layer.temperatureRange ? t(layer.temperatureRange) : '');
+      if (metaEl) {
+        const parts = [];
+        if (layer.temperatureRange) parts.push(t(layer.temperatureRange));
+        if (layer.compositionShort) parts.push(t(layer.compositionShort));
+        if (layer.thickness) parts.push(t(layer.thickness));
+        metaEl.textContent = parts.join(' \u00B7 ');
+      }
     });
-    // Re-render open detail panel if any
     if (this._activeLayerIndex >= 0 && this._currentLayers[this._activeLayerIndex]) {
       this._showDetailPanel(this._currentLayers[this._activeLayerIndex]);
     }
@@ -1032,22 +1056,31 @@ export class CrossSectionViewer {
   }
 
   _onRowHover(index, entering) {
-    // Pulse the matching badge
-    const badge = this._badges[index];
-    if (badge) {
+    // Glow the matching color dot
+    const dot = this._colorDots[index];
+    if (dot) {
       if (entering) {
-        badge.classList.remove('pulse');
-        // Force reflow so re-adding the class restarts the animation
-        void badge.offsetWidth;
-        badge.classList.add('pulse');
+        dot.classList.add('glow');
       } else {
-        badge.classList.remove('pulse');
+        dot.classList.remove('glow');
       }
     }
-    // Boost emissive of the matching boundary ring
+    // Boost emissive of the matching boundary ring + layer glow
     const ring = this._boundaryRings[index];
     if (ring) {
       ring.material.opacity = entering ? 1.0 : 0.85;
+    }
+
+    // Highlight layer in 3D with glow effect
+    if (this._layerMeshes[index] && this._activeLayerIndex < 0) {
+      const mat = this._layerMeshes[index].material;
+      const base = mat.userData.baseEmissive;
+      if (entering) {
+        mat.emissive = base.clone().multiplyScalar(3.0);
+      } else {
+        mat.emissive = base.clone();
+      }
+      mat.emissiveIntensity = 1.0;
     }
 
     // Expand the hovered layer outward along +X so it separates from the cut face
@@ -1158,13 +1191,29 @@ export class CrossSectionViewer {
 
   _onResize() {
     if (!this._renderer || !this._camera || !this._canvas) return;
-    const w = this._canvas.clientWidth;
-    const h = this._canvas.clientHeight;
+    const container = document.getElementById('cs-body');
+    const isDesktop = container ? container.offsetWidth >= 768 : window.innerWidth >= 768;
+    let canvasSize;
+    if (isDesktop) {
+      canvasSize = Math.min(
+        container ? container.offsetWidth * 0.52 : window.innerWidth * 0.52,
+        container ? container.offsetHeight - 20 : window.innerHeight - 80,
+        480
+      );
+    } else {
+      canvasSize = Math.min(
+        container ? container.offsetWidth - 16 : window.innerWidth - 16,
+        window.innerHeight * 0.42
+      );
+    }
+    canvasSize = Math.max(canvasSize, 200);
+    const w = canvasSize;
+    const h = canvasSize;
     if (w === 0 || h === 0) return;
     this._renderer.setSize(w, h);
     this._camera.aspect = w / h;
     this._camera.updateProjectionMatrix();
-    // Badge positions update automatically each frame via _updateBadgePositions()
+    // Dot positions update automatically each frame via _updateDotPositions()
   }
 
   // ─── Utilities ───────────────────────────────────────────────────────────────

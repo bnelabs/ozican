@@ -1,0 +1,157 @@
+/* ── Cross-Section Viewer Redesign ──
+   Color-coded layers, responsive layout, opening animation, detail cards.
+   Imported by CrossSectionViewer.js — Vite handles CSS injection. */
+
+/* ── Layout overrides ── */
+
+/* Desktop: canvas max 55% width, aspect 1:1 */
+@media (min-width: 768px) {
+  #cs-body {
+    align-items: stretch;
+  }
+  #cs-canvas {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: 55%;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+  }
+  #cs-sidebar {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 280px;
+  }
+}
+
+/* Mobile: canvas on top, sidebar below */
+@media (max-width: 767px) {
+  #cs-body {
+    flex-direction: column;
+  }
+  #cs-canvas {
+    flex: 0 0 auto;
+    width: 100%;
+    max-height: 45vh;
+    height: auto;
+  }
+  #cs-sidebar {
+    flex: 1 1 0;
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    overflow-y: auto;
+  }
+}
+
+/* ── Layer cards ── */
+
+.cs-layer-card {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  background: rgba(255,255,255,0.04);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+  overflow: hidden;
+  border: none;
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  font-family: inherit;
+  padding: 0;
+  /* start invisible for stagger animation */
+  opacity: 0;
+  transform: translateX(18px);
+}
+
+.cs-layer-card.visible {
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 0.35s ease, transform 0.35s ease,
+              background 0.15s, box-shadow 0.15s;
+}
+
+.cs-layer-card:hover,
+.cs-layer-card.active {
+  background: rgba(255,255,255,0.1);
+  transform: translateX(2px);
+}
+
+.cs-layer-card.active {
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+}
+
+.cs-layer-card.dimmed {
+  opacity: 0.28 !important;
+}
+
+.cs-layer-color-bar {
+  width: 4px;
+  background: var(--layer-color, #666);
+  flex-shrink: 0;
+  transition: width 0.15s;
+}
+
+.cs-layer-card:hover .cs-layer-color-bar,
+.cs-layer-card.active .cs-layer-color-bar {
+  width: 6px;
+}
+
+.cs-layer-info {
+  padding: 0.6rem 0.8rem;
+  min-width: 0;
+}
+
+.cs-layer-card .cs-layer-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cs-layer-card.active .cs-layer-name {
+  color: #fff;
+}
+
+.cs-layer-meta {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.5);
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+/* ── Color indicator dots on canvas overlay (replacing numbered badges) ── */
+
+.cs-color-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--layer-color, #fff);
+  border: 2px solid rgba(255,255,255,0.8);
+  box-shadow: 0 0 8px var(--layer-color, #fff);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.2s;
+  z-index: 2;
+}
+
+.cs-color-dot.visible {
+  opacity: 1;
+}
+
+.cs-color-dot.glow {
+  transform: scale(1.6);
+  box-shadow: 0 0 16px var(--layer-color, #fff), 0 0 32px var(--layer-color, #fff);
+}
+
+/* ── Opening animation keyframes ── */
+
+@keyframes cs-overlay-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
