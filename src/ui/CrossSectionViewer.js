@@ -451,15 +451,10 @@ export class CrossSectionViewer {
     this._starfield      = null;
     this._coreLight      = null;
 
-    // Camera: angled from upper-front so Y-axis layer burst is visible as vertical spread.
-    // +x offset keeps the cut face visible; elevated Y shows the exploded layers from above.
-    this._camStart = new THREE.Vector3(3.0, 2.8, 4.5);
-    this._camEnd   = new THREE.Vector3(1.3, 2.0, 3.5);
-
-    // Burst animation state (populated in _buildGeometry when layer count is known)
-    this._burstTargets  = [];  // final Y position per layer
-    this._burstCurrentY = [];  // current interpolated Y per layer
-    this._burstCenterY  = 0;   // midpoint of exploded stack, for camera lookAt
+    // Camera: nearly equatorial so the cut face (+X half-circle) fills the viewport.
+    // Small +X offset keeps the exterior dome visible alongside the cut face.
+    this._camStart = new THREE.Vector3(2.5, 0.6, 5.0);
+    this._camEnd   = new THREE.Vector3(1.0, 0.2, 3.2);
 
     // Color dot indicators (replacing numbered badges)
     this._colorDots = [];
@@ -579,30 +574,16 @@ export class CrossSectionViewer {
   // ─── Three.js scene ─────────────────────────────────────────────────────────
 
   _buildScene(layers) {
-    // Responsive canvas sizing — constrain to container
-    const container = document.getElementById('cs-body');
-    const isDesktop = container ? container.offsetWidth >= 768 : window.innerWidth >= 768;
-    let canvasSize;
-    if (isDesktop) {
-      canvasSize = Math.min(
-        container ? container.offsetWidth * 0.52 : window.innerWidth * 0.52,
-        container ? container.offsetHeight - 20 : window.innerHeight - 80,
-        480
-      );
-    } else {
-      canvasSize = Math.min(
-        container ? container.offsetWidth - 16 : window.innerWidth - 16,
-        window.innerHeight * 0.42
-      );
-    }
-    canvasSize = Math.max(canvasSize, 200); // minimum floor
-    const w = canvasSize;
-    let h = canvasSize;
+    // Use the canvas element's actual CSS-determined size.
+    // main.css gives it flex: 0 0 60%; height: 100% on desktop, so this fills the left panel.
+    // setSize(..., false) preserves the CSS layout; renderer pixel buffer matches display size.
+    const w = Math.max(this._canvas.clientWidth,  200);
+    const h = Math.max(this._canvas.clientHeight, 200);
 
     this._renderer = new THREE.WebGLRenderer({
       canvas: this._canvas, antialias: true, alpha: true,
     });
-    this._renderer.setSize(w, h);
+    this._renderer.setSize(w, h, false);
     this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this._renderer.localClippingEnabled = true;
     this._renderer.setClearColor(0x000000, 0);
@@ -695,13 +676,6 @@ export class CrossSectionViewer {
     this._expandTarget  = new Array(this._layerMeshes.length).fill(0);
     this._expandCurrent = new Array(this._layerMeshes.length).fill(0);
 
-    // Burst: outer layers drift upward, innermost stays at y=0.
-    // spacing 0.30 gives ~0.9 spread for 4 layers, ~1.5 for 6 layers.
-    const _nL = this._layerMeshes.length;
-    this._burstTargets  = Array.from({ length: _nL }, (_, i) => (_nL - 1 - i) * 0.30);
-    this._burstCurrentY = new Array(_nL).fill(0);
-    this._burstCenterY  = (_nL > 1) ? ((_nL - 1) * 0.30) / 2 : 0;
-
     // ── Cut-face disc ──
     // Full circle at x=0.002, facing +X (toward camera).
     // MeshBasicMaterial — ignores lighting, always shows texture at full brightness.
@@ -763,9 +737,9 @@ export class CrossSectionViewer {
       this._sphereGroup.scale.setScalar(this._easeOutBack(scaleT));
     }
 
-    // ── Phase 2: quick clip sweep (0.4 → 1.2 s) ──
-    // Clip constant 1.5 → 0: exposes the cut face. Fast 0.8 s sweep.
-    const cutT      = Math.min(Math.max((elapsed - 0.4) / 0.8, 0), 1);
+    // ── Phase 2: clip sweep (0.4 → 1.8 s) ──
+    // Clip constant 1.5 → 0: dramatic 1.4 s blade revealing the cross-section face.
+    const cutT      = Math.min(Math.max((elapsed - 0.4) / 1.4, 0), 1);
     const clipConst = 1.5 * (1 - this._easeOutCubic(cutT));
     if (this._clipPlane1) this._clipPlane1.constant = clipConst;
 
@@ -789,66 +763,41 @@ export class CrossSectionViewer {
       }
     }
 
-    // ── Phase 3: Y-axis burst — layers drift upward in staggered sequence (1.2 → 3.2 s) ──
-    // Outermost layer (index 0) moves highest; innermost core stays at y=0.
-    // Each layer starts moving 0.12 s after the one below it.
-    if (this._burstTargets && this._burstCurrentY) {
-      for (let i = 0; i < this._layerMeshes.length; i++) {
-        const burstStart   = 1.2 + i * 0.12;
-        const burstElapsed = Math.max(0, elapsed - burstStart);
-        const burstT       = Math.min(burstElapsed / 1.2, 1);
-        const targetY      = this._burstTargets[i] * this._easeOutBack(burstT);
-        this._burstCurrentY[i] += (targetY - this._burstCurrentY[i]) * 0.12;
-
-        this._layerMeshes[i].position.y = this._burstCurrentY[i];
-        // Boundary rings and face disc follow their layer
-        if (this._boundaryRings[i]) {
-          this._boundaryRings[i].position.y = this._burstCurrentY[i];
-        }
-      }
-      // Face disc sits at the innermost layer (y=0 — core stays put)
-      // It shows the full concentric cross-section at ground level.
-    }
-
-    // ── Phase 3b: sidebar rows appear as each layer reaches its burst position ──
+    // ── Phase 3: sidebar rows stagger in during the clip sweep ──
     for (let i = 0; i < this._rowEls.length; i++) {
-      if (elapsed >= 1.6 + i * 0.15) {
+      if (elapsed >= 1.2 + i * 0.12) {
         this._rowEls[i].classList.add('visible');
       }
     }
 
-    // ── Core light: fades in with cut, pulses gently after burst settles ──
+    // ── Core light: fades in with cut, pulses gently after settled ──
     if (this._coreLight) {
       const base  = cutT * 1.6;
-      const pulse = elapsed > 3.2 ? Math.sin(elapsed * 1.2) * 0.35 : 0;
+      const pulse = elapsed > 2.0 ? Math.sin(elapsed * 1.2) * 0.35 : 0;
       this._coreLight.intensity = base + pulse;
     }
 
-    // ── Camera: zoom in (0–1.5 s), track burst center (1.5–3.5 s), orbit (3.5 s+) ──
+    // ── Camera: zoom in (0–2.0 s) then slow orbit around Y axis (2.0 s+) ──
+    // Nearly equatorial start/end position keeps the cut face visible throughout.
     if (this._camera) {
-      const bcy = this._burstCenterY || 0;
-      if (elapsed < 1.5) {
-        const camT = this._easeOutCubic(Math.min(elapsed / 1.5, 1.0));
+      if (elapsed < 2.0) {
+        const camT = this._easeOutCubic(Math.min(elapsed / 2.0, 1.0));
         this._camera.position.lerpVectors(this._camStart, this._camEnd, camT);
         this._camera.lookAt(0, 0, 0);
-      } else if (elapsed < 3.5) {
-        // Shift lookAt upward to center of exploding layers
-        const trackT = (elapsed - 1.5) / 2.0;
-        this._camera.lookAt(0, bcy * this._easeOutCubic(trackT), 0);
       } else {
-        // Slow orbit around Y axis, looking at burst center
-        const r = Math.sqrt(this._camEnd.x ** 2 + this._camEnd.z ** 2);
+        // Slow orbit around Y axis, always looking at origin
+        const r          = Math.sqrt(this._camEnd.x ** 2 + this._camEnd.z ** 2);
         const startAngle = Math.atan2(this._camEnd.x, this._camEnd.z);
-        const angle = startAngle + (elapsed - 3.5) * 0.18;
+        const angle      = startAngle + (elapsed - 2.0) * 0.15;
         this._camera.position.x = r * Math.sin(angle);
         this._camera.position.z = r * Math.cos(angle);
         this._camera.position.y = this._camEnd.y;
-        this._camera.lookAt(0, bcy, 0);
+        this._camera.lookAt(0, 0, 0);
       }
     }
 
-    // ── Build color dots once burst has mostly settled ──
-    if (this._colorDots.length === 0 && elapsed > 4.0 && this._currentLayers) {
+    // ── Build color dots after zoom settles ──
+    if (this._colorDots.length === 0 && elapsed > 2.8 && this._currentLayers) {
       this._buildColorDots();
     }
 
@@ -1229,26 +1178,10 @@ export class CrossSectionViewer {
 
   _onResize() {
     if (!this._renderer || !this._camera || !this._canvas) return;
-    const container = document.getElementById('cs-body');
-    const isDesktop = container ? container.offsetWidth >= 768 : window.innerWidth >= 768;
-    let canvasSize;
-    if (isDesktop) {
-      canvasSize = Math.min(
-        container ? container.offsetWidth * 0.52 : window.innerWidth * 0.52,
-        container ? container.offsetHeight - 20 : window.innerHeight - 80,
-        480
-      );
-    } else {
-      canvasSize = Math.min(
-        container ? container.offsetWidth - 16 : window.innerWidth - 16,
-        window.innerHeight * 0.42
-      );
-    }
-    canvasSize = Math.max(canvasSize, 200);
-    const w = canvasSize;
-    const h = canvasSize;
+    const w = Math.max(this._canvas.clientWidth,  200);
+    const h = Math.max(this._canvas.clientHeight, 200);
     if (w === 0 || h === 0) return;
-    this._renderer.setSize(w, h);
+    this._renderer.setSize(w, h, false);
     this._camera.aspect = w / h;
     this._camera.updateProjectionMatrix();
     // Dot positions update automatically each frame via _updateDotPositions()

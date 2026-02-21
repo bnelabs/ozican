@@ -4,22 +4,24 @@
 
 /* ── Layout overrides ── */
 
-/* Desktop: canvas max 55% width, aspect 1:1 */
+/* Desktop: canvas fills the left 60%, sidebar takes the right 40% */
 @media (min-width: 768px) {
   #cs-body {
     align-items: stretch;
   }
   #cs-canvas {
-    flex: 0 0 auto;
-    width: auto;
-    max-width: 55%;
-    aspect-ratio: 1 / 1;
-    object-fit: contain;
+    /* Match main.css split: 60% left panel, full height */
+    flex: 0 0 60%;
+    width: 60%;
+    height: 100%;
+    max-width: none;
+    aspect-ratio: unset;
+    display: block;
   }
   #cs-sidebar {
-    flex: 1 1 0;
-    width: auto;
-    min-width: 280px;
+    flex: 0 0 40%;
+    width: 40%;
+    min-width: 240px;
   }
 }
 
