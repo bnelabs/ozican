@@ -1,0 +1,120 @@
+/* ============================================
+   MISSION TIMELINE STRIP
+   ============================================ */
+
+.mission-timeline {
+  position: fixed;
+  bottom: 90px; /* above planet bar */
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(700px, 95vw);
+  width: 100%;
+  background: rgba(6, 6, 18, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  padding: 0.75rem 1rem;
+  z-index: 400;
+  pointer-events: none;
+}
+
+.mission-timeline-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.mission-timeline-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+}
+
+.mission-timeline-phases {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.mission-timeline-phases::-webkit-scrollbar { display: none; }
+
+.mission-phase {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 60px;
+  flex: 1;
+  opacity: 0.4;
+  transition: opacity 0.3s;
+}
+
+.mission-phase.active {
+  opacity: 1;
+}
+
+.mission-phase.passed {
+  opacity: 0.65;
+}
+
+.mission-phase-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.3);
+  border: 1.5px solid rgba(255,255,255,0.4);
+  transition: background 0.3s, border-color 0.3s;
+}
+
+.mission-phase.active .mission-phase-dot {
+  background: #fdb813;
+  border-color: #fdb813;
+  box-shadow: 0 0 8px rgba(253,184,19,0.6);
+}
+
+.mission-phase.passed .mission-phase-dot {
+  background: rgba(255,255,255,0.5);
+  border-color: rgba(255,255,255,0.5);
+}
+
+.mission-phase-name {
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.7);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70px;
+}
+
+.mission-phase-date {
+  font-size: 0.58rem;
+  color: rgba(255,255,255,0.35);
+}
+
+.mission-phase-line {
+  height: 1.5px;
+  flex: 1;
+  background: rgba(255,255,255,0.15);
+  min-width: 8px;
+  margin-bottom: 20px; /* align with dots */
+}
+
+@media (max-width: 520px) {
+  .mission-timeline {
+    bottom: 70px;
+    padding: 0.5rem 0.75rem;
+  }
+  .mission-phase {
+    min-width: 44px;
+  }
+  .mission-phase-name {
+    max-width: 50px;
+    font-size: 0.58rem;
+  }
+}

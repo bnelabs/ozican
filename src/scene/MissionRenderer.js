@@ -3,11 +3,13 @@
  * Spacecraft animate along historically accurate paths based on Keplerian positions.
  */
 import * as THREE from 'three';
+import '../styles/missions.css';
 import { MISSIONS } from '../data/missions.js';
 import {
   getMissionTrajectory,
   getMissionDateAtProgress,
   getWaypointProgressPositions,
+  getPlanetPosition,
 } from './OrbitalMechanics.js';
 
 export class MissionRenderer {
@@ -28,6 +30,11 @@ export class MissionRenderer {
     this.cameraFollowEnabled = false;
     this._followCamera = null;
     this._followControls = null;
+
+    // Epoch planet ghost spheres
+    this._epochMeshes = [];
+    // DOM timeline strip
+    this._timelineStrip = null;
 
     // Event callbacks
     this.onWaypointReached = null;
@@ -115,6 +122,12 @@ export class MissionRenderer {
     this.spacecraft.position.copy(points[0]);
     this.trajectoryGroup.add(this.spacecraft);
 
+    // Show ghost spheres for planets at launch date
+    this._showEpochPlanets(mission);
+
+    // Show DOM timeline strip with mission phases
+    this._createTimelineStrip(mission);
+
     this.animationProgress = 0;
     this.lastWaypointIndex = -1;
   }
@@ -186,6 +199,9 @@ export class MissionRenderer {
       this._followControls.target.lerp(point, 0.08);
     }
 
+    // Update timeline strip active phase
+    this.updateTimelineProgress(this.animationProgress);
+
     // Emit progress update
     if (this.onProgressUpdate) {
       const currentDate = getMissionDateAtProgress(this.activeMission.id, this.animationProgress);
@@ -222,6 +238,7 @@ export class MissionRenderer {
         this.spacecraft.lookAt(point.clone().add(tangent));
       }
     }
+    this.updateTimelineProgress(this.animationProgress);
   }
 
   /**
@@ -244,6 +261,136 @@ export class MissionRenderer {
 
   setSpeed(speed) {
     this.playbackSpeed = speed;
+  }
+
+  // ==================== Epoch Planet Ghosts ====================
+
+  /**
+   * Show semi-transparent ghost spheres for key planets at the mission's launch date.
+   * Gives spatial context so users can see where planets were when the mission launched.
+   */
+  _showEpochPlanets(mission) {
+    this._clearEpochPlanets();
+    if (!mission || !mission.waypoints || !mission.launchDate) return;
+
+    // Collect unique bodies from waypoints
+    const bodies = new Set();
+    for (const wp of mission.waypoints) {
+      if (wp.body) bodies.add(wp.body.toLowerCase());
+    }
+
+    const PLANET_COLORS = {
+      earth: 0x4A90D9,
+      venus: 0xE8CDA0,
+      mars: 0xC1440E,
+      jupiter: 0xC88B3A,
+      saturn: 0xC5AB6E,
+      uranus: 0x7EC8E3,
+      neptune: 0x3B5BA5,
+    };
+
+    for (const planetKey of bodies) {
+      try {
+        const pos = getPlanetPosition(planetKey, mission.launchDate);
+        if (!pos || (pos.x === 0 && pos.y === 0 && pos.z === 0 && planetKey !== 'sun')) continue;
+
+        const color = PLANET_COLORS[planetKey] || 0x888888;
+
+        const geo = new THREE.SphereGeometry(1.5, 16, 16);
+        const mat = new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.35,
+          wireframe: false,
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.copy(pos);
+        this.trajectoryGroup.add(mesh);
+        this._epochMeshes.push(mesh);
+      } catch (e) {
+        console.warn('Could not compute epoch position for', planetKey, e);
+      }
+    }
+  }
+
+  _clearEpochPlanets() {
+    for (const m of this._epochMeshes) {
+      this.trajectoryGroup.remove(m);
+      m.geometry.dispose();
+      m.material.dispose();
+    }
+    this._epochMeshes = [];
+  }
+
+  // ==================== Mission Phase Timeline Strip ====================
+
+  /**
+   * Create a DOM timeline strip showing mission phases/waypoints.
+   */
+  _createTimelineStrip(mission) {
+    this._removeTimelineStrip();
+    if (!mission) return;
+
+    const strip = document.createElement('div');
+    strip.id = 'mission-timeline';
+    strip.className = 'mission-timeline';
+    strip.setAttribute('aria-label', 'Mission timeline');
+
+    const phases = mission.waypoints || [];
+    const phasesHtml = phases.map((wp, i) => {
+      const name = wp.event || `Phase ${i + 1}`;
+      const year = wp.date ? new Date(wp.date).getFullYear() : '';
+      const phaseHtml = `<div class="mission-phase${i === 0 ? ' active' : ''}" data-idx="${i}">
+        <div class="mission-phase-dot"></div>
+        <div class="mission-phase-name">${name}</div>
+        <div class="mission-phase-date">${year}</div>
+      </div>`;
+      // Add connector line between phases (not after the last one)
+      if (i < phases.length - 1) {
+        return phaseHtml + '<div class="mission-phase-line"></div>';
+      }
+      return phaseHtml;
+    }).join('');
+
+    strip.innerHTML = `
+      <div class="mission-timeline-inner">
+        <div class="mission-timeline-label">${mission.name || 'Mission'}</div>
+        <div class="mission-timeline-phases">${phasesHtml}</div>
+      </div>
+    `;
+
+    document.body.appendChild(strip);
+    this._timelineStrip = strip;
+  }
+
+  _removeTimelineStrip() {
+    if (this._timelineStrip) {
+      this._timelineStrip.remove();
+      this._timelineStrip = null;
+    }
+  }
+
+  /**
+   * Update active phase in the timeline strip based on animation progress.
+   */
+  updateTimelineProgress(progress) {
+    if (!this._timelineStrip) return;
+    const phases = this._timelineStrip.querySelectorAll('.mission-phase');
+    if (!phases.length) return;
+
+    // Determine active phase from waypoint progress positions
+    let activeIdx = 0;
+    for (let i = this.waypointProgressPositions.length - 1; i >= 0; i--) {
+      if (progress >= this.waypointProgressPositions[i] - 0.01) {
+        activeIdx = i;
+        break;
+      }
+    }
+
+    phases.forEach((p, i) => {
+      p.classList.toggle('active', i === activeIdx);
+      p.classList.toggle('passed', i < activeIdx);
+    });
   }
 
   /** Create engine glow sprite in mission colour. */
@@ -398,6 +545,10 @@ export class MissionRenderer {
   }
 
   clearMission() {
+    // Clean up epoch planet ghosts and timeline strip
+    this._clearEpochPlanets();
+    this._removeTimelineStrip();
+
     while (this.trajectoryGroup.children.length > 0) {
       const child = this.trajectoryGroup.children[0];
       if (child.geometry) child.geometry.dispose();
