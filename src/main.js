@@ -719,7 +719,6 @@ const DEDICATION_KEY = 'ozmos-dedication-seen';
 
 let dedicationAudio = null;
 let _countdownCancelled = false;
-let _countdownAudio = null;
 
 async function runLaunchCountdown() {
   const el = document.getElementById('launch-countdown');
@@ -736,13 +735,6 @@ async function runLaunchCountdown() {
 
   _countdownCancelled = false;
   el.classList.add('active');
-
-  // Play NASA countdown audio
-  try {
-    _countdownAudio = new Audio('/audio/countdown.mp3');
-    _countdownAudio.volume = 0.7;
-    _countdownAudio.play().catch(() => {});
-  } catch (e) { _countdownAudio = null; }
 
   // Play NASA countdown audio
   let countdownAudio = null;
