@@ -263,6 +263,19 @@ export const ui_en = {
   // Tour
   'nav.tour': 'Tour',
   'aria.tour': 'Cinematic Tour',
+  'tour.stopCounter': '{current} / {total}',
+  'tour.pause': 'Pause',
+  'tour.resume': 'Resume',
+  'tour.prevStop': 'Previous',
+  'tour.nextStop': 'Next',
+  'tour.exitTour': 'Exit Tour',
+
+  // Help tabs
+  'help.tabQuickstart': 'Quick Start',
+  'help.tabFeatures': 'Features',
+  'help.tabPlanets': 'Planet Guide',
+  'help.tabGlossary': 'Glossary',
+
   'aria.missions': 'NASA Missions',
   'aria.storm': 'Solar Storm Simulation',
 

@@ -484,8 +484,154 @@ function startApp() {
   const helpOverlayEl = document.getElementById('help-overlay');
   const btnHelpClose = document.getElementById('btn-help-close');
 
+  // Planet quick-facts data for Help > Planet Guide tab
+  const PLANET_QUICK_FACTS = {
+    Sun:     { icon: '\u2600', type: 'Star',         facts: ['Type: G-type main-sequence star', 'Age: 4.6 billion years', 'Distance to Earth: 1 AU (149.6 million km)', 'Surface temp: 5,778 K', 'Diameter: 1.39 million km (109\u00d7 Earth)'] },
+    Mercury: { icon: '\u25CF', type: 'Terrestrial',  facts: ['Diameter: 4,879 km (0.38\u00d7 Earth)', 'Distance from Sun: 0.39 AU', 'Orbital period: 88 Earth days', 'No moons', 'No significant atmosphere'] },
+    Venus:   { icon: '\u25CF', type: 'Terrestrial',  facts: ['Diameter: 12,104 km (0.95\u00d7 Earth)', 'Distance from Sun: 0.72 AU', 'Day = 243 Earth days (longer than year)', 'Surface pressure: 92\u00d7 Earth', '96.5% CO\u2082 atmosphere'] },
+    Earth:   { icon: '\u25CF', type: 'Terrestrial',  facts: ['Diameter: 12,742 km', 'Distance from Sun: 1 AU', '1 Moon', 'Surface: 71% water', 'Atmosphere: 78% N\u2082, 21% O\u2082'] },
+    Mars:    { icon: '\u25CF', type: 'Terrestrial',  facts: ['Diameter: 6,779 km (0.53\u00d7 Earth)', 'Distance from Sun: 1.52 AU', '2 moons (Phobos, Deimos)', 'Longest valley: Valles Marineris (4,000 km)', 'Atmosphere: 95% CO\u2082 (very thin)'] },
+    Jupiter: { icon: '\u25CF', type: 'Gas Giant',    facts: ['Diameter: 139,820 km (11\u00d7 Earth)', 'Distance from Sun: 5.2 AU', '95 known moons', 'Great Red Spot: 1.3\u00d7 Earth\'s diameter', 'Day: 9h 56min (fastest rotation)'] },
+    Saturn:  { icon: '\u25CF', type: 'Gas Giant',    facts: ['Diameter: 116,460 km (9\u00d7 Earth)', 'Rings span 282,000 km', '146 known moons', 'Density less than water', 'Wind speeds: up to 1,800 km/h'] },
+    Uranus:  { icon: '\u25CF', type: 'Ice Giant',    facts: ['Diameter: 50,724 km (4\u00d7 Earth)', 'Axial tilt: 97.77\u00b0 (rotates on side)', '28 moons (named for Shakespeare)', 'Faint ring system', 'Orbital period: 84 years'] },
+    Neptune: { icon: '\u25CF', type: 'Ice Giant',    facts: ['Diameter: 49,244 km (3.9\u00d7 Earth)', 'Distance: 30.07 AU', '16 moons including Triton', 'Fastest winds: 2,100 km/h', 'Orbital period: 165 years'] },
+  };
+
+  const GLOSSARY = [
+    { term: 'AU (Astronomical Unit)', def: 'Average Earth-Sun distance: 149.6 million km. Used to measure distances in the solar system.' },
+    { term: 'Perihelion', def: 'The point in a planet\'s orbit closest to the Sun.' },
+    { term: 'Aphelion', def: 'The point in a planet\'s orbit farthest from the Sun.' },
+    { term: 'Orbital Period', def: 'Time for a body to complete one full orbit around the Sun.' },
+    { term: 'Eccentricity', def: 'How elliptical an orbit is. 0 = perfect circle, 1 = parabola.' },
+    { term: 'Kepler\'s Laws', def: 'Three laws describing orbital motion: (1) orbits are ellipses; (2) equal areas swept in equal times; (3) orbital period\u00b2 \u221d orbital radius\u00b3.' },
+    { term: 'CME (Coronal Mass Ejection)', def: 'A massive burst of plasma and magnetic field from the Sun\'s corona. Can cause geomagnetic storms on Earth.' },
+    { term: 'Solar Wind', def: 'A stream of charged particles (mostly protons and electrons) continuously flowing from the Sun.' },
+    { term: 'Magnetosphere', def: 'The region around a planet dominated by its magnetic field. Protects Earth from solar wind.' },
+    { term: 'Retrograde Motion', def: 'Apparent backward (westward) movement of a planet in the sky, caused by Earth overtaking it in orbit.' },
+    { term: 'Hohmann Transfer', def: 'The most fuel-efficient orbit to travel between two circular orbits around the same body.' },
+    { term: 'Dwarf Planet', def: 'A body that orbits the Sun, has enough mass for a round shape, but has NOT cleared its orbital neighborhood (e.g., Pluto, Ceres).' },
+    { term: 'Kuiper Belt', def: 'A region of the outer solar system (30\u201350 AU) containing icy bodies including Pluto and many other dwarf planets.' },
+    { term: 'Oort Cloud', def: 'A theoretical vast shell of icy bodies surrounding the solar system at 2,000\u2013100,000 AU. Source of long-period comets.' },
+    { term: 'Albedo', def: 'The fraction of sunlight reflected by a surface. Snow/ice has high albedo; dark rock has low albedo.' },
+    { term: 'Synchronous Rotation', def: 'When a moon\'s rotation period equals its orbital period, so it always shows the same face (like Earth\'s Moon).' },
+    { term: 'Roche Limit', def: 'The distance from a body at which tidal forces would pull apart a satellite. Saturn\'s rings exist inside Saturn\'s Roche limit.' },
+    { term: 'Hill Sphere', def: 'The region around a body where its gravity dominates over the Sun\'s gravity \u2014 defines where moons can stably orbit.' },
+    { term: 'Escape Velocity', def: 'Minimum speed to escape a body\'s gravity. Earth: 11.2 km/s. Moon: 2.4 km/s. Jupiter: 59.5 km/s.' },
+    { term: 'Barycenter', def: 'The center of mass of a two-body system. The Earth-Moon barycenter is inside Earth; the Sun-Jupiter barycenter is just outside the Sun\'s surface.' },
+  ];
+
+  let _helpContentInjected = false;
+
+  function _injectHelpTabs() {
+    if (_helpContentInjected) return;
+    _helpContentInjected = true;
+
+    const contentEl = helpOverlayEl.querySelector('.help-content');
+    if (!contentEl) return;
+
+    // Build planet cards HTML
+    let planetCardsHTML = '<div class="help-planet-cards">';
+    for (const [name, data] of Object.entries(PLANET_QUICK_FACTS)) {
+      const factsLis = data.facts.map(f => `<li>${f}</li>`).join('');
+      planetCardsHTML += `
+        <div class="help-planet-card">
+          <div class="help-planet-card-header">
+            <span class="help-planet-card-icon">${data.icon}</span>
+            <span class="help-planet-card-name">${name}</span>
+            <span class="help-planet-card-type">${data.type}</span>
+            <span class="help-planet-card-chevron">\u203A</span>
+          </div>
+          <div class="help-planet-card-facts"><ul>${factsLis}</ul></div>
+        </div>`;
+    }
+    planetCardsHTML += '</div>';
+
+    // Build glossary HTML
+    let glossaryHTML = '<div class="glossary-list">';
+    for (const g of GLOSSARY) {
+      glossaryHTML += `
+        <div class="glossary-item">
+          <div class="glossary-term">${g.term}</div>
+          <div class="glossary-def">${g.def}</div>
+        </div>`;
+    }
+    glossaryHTML += '</div>';
+
+    // Replace content with tabbed layout
+    contentEl.innerHTML = `
+      <div class="help-tabs" role="tablist">
+        <button class="help-tab active" role="tab" data-tab="quickstart" data-i18n="help.tabQuickstart">${t('help.tabQuickstart') || 'Quick Start'}</button>
+        <button class="help-tab" role="tab" data-tab="features" data-i18n="help.tabFeatures">${t('help.tabFeatures') || 'Features'}</button>
+        <button class="help-tab" role="tab" data-tab="planets" data-i18n="help.tabPlanets">${t('help.tabPlanets') || 'Planet Guide'}</button>
+        <button class="help-tab" role="tab" data-tab="glossary" data-i18n="help.tabGlossary">${t('help.tabGlossary') || 'Glossary'}</button>
+      </div>
+
+      <div class="help-tab-content" id="help-tab-quickstart">
+        <section class="help-section">
+          <h3 data-i18n="help.navTitle">${t('help.navTitle') || 'Navigation'}</h3>
+          <ul>
+            <li data-i18n="help.nav1">${t('help.nav1')}</li>
+            <li data-i18n="help.nav2">${t('help.nav2')}</li>
+            <li data-i18n="help.nav3">${t('help.nav3')}</li>
+            <li data-i18n="help.nav4">${t('help.nav4')}</li>
+          </ul>
+        </section>
+        <section class="help-section">
+          <h3 data-i18n="help.shortcutsTitle">${t('help.shortcutsTitle') || 'Keyboard Shortcuts'}</h3>
+          <ul>
+            <li><kbd>Space</kbd> <span data-i18n="help.kbSpace">${t('help.kbSpace')}</span></li>
+            <li><kbd>Esc</kbd> <span data-i18n="help.kbEsc">${t('help.kbEsc')}</span></li>
+            <li><kbd>?</kbd> <span data-i18n="help.kbHelp">${t('help.kbHelp')}</span></li>
+            <li><kbd>F</kbd> <span data-i18n="help.kbFullscreen">${t('help.kbFullscreen')}</span></li>
+          </ul>
+        </section>
+      </div>
+
+      <div class="help-tab-content hidden" id="help-tab-features">
+        <section class="help-section">
+          <h3 data-i18n="help.featuresTitle">${t('help.featuresTitle') || 'Features'}</h3>
+          <ul>
+            <li data-i18n="help.feat1">${t('help.feat1')}</li>
+            <li data-i18n="help.feat2">${t('help.feat2')}</li>
+            <li data-i18n="help.feat3">${t('help.feat3')}</li>
+            <li data-i18n="help.feat4">${t('help.feat4')}</li>
+            <li data-i18n="help.feat5">${t('help.feat5')}</li>
+            <li data-i18n="help.feat6">${t('help.feat6')}</li>
+          </ul>
+        </section>
+      </div>
+
+      <div class="help-tab-content hidden" id="help-tab-planets">
+        ${planetCardsHTML}
+      </div>
+
+      <div class="help-tab-content hidden" id="help-tab-glossary">
+        ${glossaryHTML}
+      </div>
+    `;
+
+    // Wire tab switching
+    contentEl.querySelectorAll('.help-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        contentEl.querySelectorAll('.help-tab').forEach(t2 => t2.classList.remove('active'));
+        contentEl.querySelectorAll('.help-tab-content').forEach(c => c.classList.add('hidden'));
+        tab.classList.add('active');
+        const panel = document.getElementById(`help-tab-${tab.dataset.tab}`);
+        if (panel) panel.classList.remove('hidden');
+      });
+    });
+
+    // Wire planet card expand/collapse
+    contentEl.querySelectorAll('.help-planet-card-header').forEach(header => {
+      header.addEventListener('click', () => {
+        header.parentElement.classList.toggle('expanded');
+      });
+    });
+  }
+
   function openHelpModal() {
     if (!helpOverlayEl) return;
+    _injectHelpTabs();
     helpOverlayEl.classList.remove('hidden');
     _activateTrap('help', helpOverlayEl);
     announce(t('help.title') || 'Help');

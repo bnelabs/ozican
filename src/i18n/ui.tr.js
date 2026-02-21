@@ -263,6 +263,19 @@ export const ui_tr = {
   // Tour
   'nav.tour': 'Tur',
   'aria.tour': 'Sinematik Tur',
+  'tour.stopCounter': '{current} / {total}',
+  'tour.pause': 'Duraklat',
+  'tour.resume': 'Devam Et',
+  'tour.prevStop': 'Önceki',
+  'tour.nextStop': 'Sonraki',
+  'tour.exitTour': 'Turdan Çık',
+
+  // Help tabs
+  'help.tabQuickstart': 'Hızlı Başlangıç',
+  'help.tabFeatures': 'Özellikler',
+  'help.tabPlanets': 'Gezegen Rehberi',
+  'help.tabGlossary': 'Sözlük',
+
   'aria.missions': 'NASA Görevleri',
   'aria.storm': 'Güneş Fırtınası Simülasyonu',
 

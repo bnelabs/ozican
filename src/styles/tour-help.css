@@ -1,0 +1,296 @@
+/* ─── Tour HUD ─────────────────────────────────────────────── */
+
+.tour-hud {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 320px;
+  max-width: min(480px, 90vw);
+  background: rgba(8, 8, 20, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 18px;
+  overflow: hidden;
+  z-index: 500;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  animation: tour-hud-in 0.4s ease-out;
+}
+
+.tour-hud.hidden {
+  display: none;
+}
+
+@keyframes tour-hud-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Progress bar */
+.tour-hud-progress {
+  height: 3px;
+  background: rgba(255,255,255,0.08);
+  width: 100%;
+}
+
+.tour-hud-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #4fc3f7, #81d4fa);
+  border-radius: 0 2px 2px 0;
+  transition: width 0.6s ease;
+}
+
+/* Content area */
+.tour-hud-content {
+  padding: 16px 20px 8px;
+  text-align: center;
+}
+
+.tour-hud-planet {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #e0e0e0;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.tour-hud-fact {
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.7);
+  line-height: 1.45;
+  min-height: 2.5em;
+  transition: opacity 0.3s ease;
+}
+
+.tour-hud-fact.fade {
+  opacity: 0;
+}
+
+.tour-hud-counter {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.4);
+  margin-top: 6px;
+}
+
+/* Controls */
+.tour-hud-controls {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px 14px;
+}
+
+.tour-ctrl-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.06);
+  color: #ccc;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.tour-ctrl-btn:hover {
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  border-color: rgba(255,255,255,0.25);
+}
+
+.tour-ctrl-btn:active {
+  transform: scale(0.92);
+}
+
+.tour-ctrl-pause {
+  width: 42px;
+  height: 42px;
+  font-size: 1.15rem;
+  border-color: rgba(79,195,247,0.3);
+}
+
+.tour-ctrl-exit {
+  border-color: rgba(255,100,100,0.25);
+}
+
+.tour-ctrl-exit:hover {
+  background: rgba(255,80,80,0.15);
+  border-color: rgba(255,100,100,0.4);
+  color: #ff8a80;
+}
+
+/* ─── Help Tabs ────────────────────────────────────────────── */
+
+.help-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.help-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.help-tab {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(255,255,255,0.5);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.help-tab:hover {
+  color: rgba(255,255,255,0.8);
+}
+
+.help-tab.active {
+  color: #81d4fa;
+  border-bottom-color: #4fc3f7;
+}
+
+/* Tab content panels */
+.help-tab-content {
+  animation: help-tab-in 0.25s ease-out;
+}
+
+.help-tab-content.hidden {
+  display: none;
+}
+
+@keyframes help-tab-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Planet Guide Cards ───────────────────────────────────── */
+
+.help-planet-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.help-planet-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.help-planet-card:hover {
+  border-color: rgba(255,255,255,0.16);
+}
+
+.help-planet-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.help-planet-card-icon {
+  font-size: 1.3rem;
+  width: 28px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.help-planet-card-name {
+  font-weight: 600;
+  color: #e0e0e0;
+  font-size: 0.92rem;
+  flex: 1;
+}
+
+.help-planet-card-type {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.4);
+  padding: 2px 8px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 10px;
+}
+
+.help-planet-card-chevron {
+  color: rgba(255,255,255,0.3);
+  font-size: 0.8rem;
+  transition: transform 0.2s;
+}
+
+.help-planet-card.expanded .help-planet-card-chevron {
+  transform: rotate(90deg);
+}
+
+.help-planet-card-facts {
+  display: none;
+  padding: 0 14px 12px 52px;
+}
+
+.help-planet-card.expanded .help-planet-card-facts {
+  display: block;
+}
+
+.help-planet-card-facts ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.help-planet-card-facts li {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.6);
+  padding: 3px 0;
+  line-height: 1.4;
+}
+
+.help-planet-card-facts li::before {
+  content: '\2022';
+  color: rgba(79,195,247,0.6);
+  margin-right: 8px;
+}
+
+/* ─── Glossary ─────────────────────────────────────────────── */
+
+.glossary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.glossary-item {
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  border-left: 3px solid rgba(79,195,247,0.3);
+}
+
+.glossary-term {
+  font-weight: 600;
+  color: #cfd8dc;
+  font-size: 0.88rem;
+  margin-bottom: 3px;
+}
+
+.glossary-def {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.55);
+  line-height: 1.45;
+}
