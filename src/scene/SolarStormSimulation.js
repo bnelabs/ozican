@@ -16,6 +16,7 @@ import {
   magnetosphereVertexShader, magnetosphereFragmentShader,
   auroraVertexShader, auroraFragmentShader,
 } from '../shaders/solarStormShader.js';
+import { CMEFluxRope } from './CMEFluxRope.js';
 
 const MAGNETIC_FIELDS = {
   mercury:  { strength: 0.01, tilt: 0,    hasField: true,  color: 0x888888 },
@@ -47,6 +48,18 @@ export class SolarStormSimulation {
     this._impactEffects = [];
     this._intervals = [];
 
+    // Milestone event tracking
+    this._milestones = {
+      cmeStart: false,
+      halfAU: false,
+      earthProximity: false,
+      auroraStart: false,
+    };
+    this._stormTime = 0;
+
+    // CME flux rope geometry
+    this._fluxRope = new CMEFluxRope(this._scene);
+
     const isMobile = window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent);
     this._particleCount = isMobile ? 30000 : 80000;
     this._showFieldLines = !isMobile;
@@ -68,7 +81,11 @@ export class SolarStormSimulation {
   deactivate() {
     this._active = false;
     this._cmeActive = false;
+    this._stormTime = 0;
+    Object.keys(this._milestones).forEach(k => this._milestones[k] = false);
+    this._fluxRope.deactivate();
     this._dispose();
+    document.dispatchEvent(new CustomEvent('storm-ended'));
   }
 
   launchNewCME() {
@@ -259,6 +276,9 @@ export class SolarStormSimulation {
 
     // Create CME shockwave ring
     this._createShockwave();
+
+    // Activate flux rope along CME direction
+    this._fluxRope.activate(new THREE.Vector3(0, 0, 0), cmeDirVec);
 
     // Schedule planet impacts
     this._scheduleImpacts();
@@ -506,6 +526,28 @@ export class SolarStormSimulation {
   update(delta) {
     if (!this._active) return;
     this._elapsed += delta;
+    this._stormTime += delta;
+
+    // Milestone event dispatch
+    if (!this._milestones.cmeStart && this._stormTime > 0.5) {
+      this._milestones.cmeStart = true;
+      this._dispatchMilestone('cmeStart', 'storm.cmeEruption');
+    }
+    if (!this._milestones.halfAU && this._stormTime > 5) {
+      this._milestones.halfAU = true;
+      this._dispatchMilestone('halfAU', 'storm.halfAU');
+    }
+    if (!this._milestones.earthProximity && this._stormTime > 12) {
+      this._milestones.earthProximity = true;
+      this._dispatchMilestone('earthProximity', 'storm.earthProximity');
+    }
+    if (!this._milestones.auroraStart && this._stormTime > 18) {
+      this._milestones.auroraStart = true;
+      this._dispatchMilestone('auroraStart', 'storm.aurora');
+    }
+
+    // Update flux rope
+    this._fluxRope.update(delta);
 
     // Update particle system
     if (this._particleSystem && this._particleSystem.material.uniforms) {
@@ -569,6 +611,14 @@ export class SolarStormSimulation {
     }
   }
 
+  _dispatchMilestone(type, i18nKey) {
+    const event = new CustomEvent('storm-milestone', {
+      detail: { type, i18nKey },
+      bubbles: true,
+    });
+    document.dispatchEvent(event);
+  }
+
   _disposeCME() {
     if (this._particleSystem) {
       this._scene.remove(this._particleSystem);
@@ -582,6 +632,7 @@ export class SolarStormSimulation {
       this._shockwaveMesh.material.dispose();
       this._shockwaveMesh = null;
     }
+    this._fluxRope.deactivate();
   }
 
   _dispose() {

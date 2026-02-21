@@ -1069,6 +1069,14 @@ export const ui_tr = {
   'layer.makemake.core.state': 'Yoğun kayaç',
   'layer.makemake.core.funFact': "Makemake'de benzer boyutlu Plüton'un aksine atmosfer tespit edilemedi — bilim insanlarını şaşırtıyor.",
 
+  // Solar storm milestone and info strings
+  'storm.cmeEruption': 'Koronal Kütle Atımı — 500–2000 km/s hızında genişleyen plazma',
+  'storm.halfAU': 'KKA 0.5 AU\'da — Dünya\'ya yarı yolda (patlamadan yaklaşık 12 saat sonra)',
+  'storm.earthProximity': 'KKA Dünya\'ya yaklaşıyor — jeomanyetik fırtına yakın (patlamadan 1–3 gün sonra)',
+  'storm.aurora': 'Kuzey Işıkları tetiklendi — yüklü parçacıklar Dünya\'nın üst atmosferini uyarıyor',
+  'storm.infoTitle': 'Güneş Fırtınası',
+  'storm.infoBody': 'Koronal Kütle Atımı (KKA), güneş rüzgarı ve manyetik alanların devasa bir patlamasıdır. Dünya\'ya yöneldiğinde jeomanyetik fırtınalara, kutup ışıklarına ve uydu arızalarına neden olabilir.',
+
   'layer.charon.iceCrust.compositionShort': 'H₂O buzu, CO₂',
   'layer.charon.iceCrust.compositionFull': 'Su buzu ve karbondioksit buzu',
   'layer.charon.iceCrust.thickness': '20 – 40 km',

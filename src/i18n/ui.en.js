@@ -1069,6 +1069,14 @@ export const ui_en = {
   'layer.makemake.core.state': 'Dense rock',
   'layer.makemake.core.funFact': 'Makemake has no detected atmosphere, unlike similar-sized Pluto — puzzling scientists.',
 
+  // Solar storm milestone and info strings
+  'storm.cmeEruption': 'Coronal Mass Ejection — plasma expanding at 500–2000 km/s',
+  'storm.halfAU': 'CME at 0.5 AU — halfway to Earth (approx. 12 hours after eruption)',
+  'storm.earthProximity': 'CME approaching Earth — geomagnetic storm imminent (1–3 days from eruption)',
+  'storm.aurora': 'Aurora Borealis triggered — charged particles exciting Earth\'s upper atmosphere',
+  'storm.infoTitle': 'Solar Storm',
+  'storm.infoBody': 'A Coronal Mass Ejection (CME) is a massive burst of solar wind and magnetic fields. When directed toward Earth, it can cause geomagnetic storms, aurora displays, and satellite disruptions.',
+
   'layer.charon.iceCrust.compositionShort': 'H₂O ice, CO₂',
   'layer.charon.iceCrust.compositionFull': 'Water ice and carbon dioxide ice',
   'layer.charon.iceCrust.thickness': '20 – 40 km',
