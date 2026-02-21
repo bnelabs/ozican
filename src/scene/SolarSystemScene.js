@@ -1029,8 +1029,15 @@ export class SolarSystemScene {
       const segments = 48;
       const planetGeo = new THREE.SphereGeometry(planetData.displayRadius, segments, segments);
       let planetMat;
-      if (TEXTURE_GENERATORS[key]) {
-        const texCanvas = TEXTURE_GENERATORS[key](512);
+      if (this.textures[key]) {
+        // Real NASA/spacecraft photo texture
+        planetMat = new THREE.MeshStandardMaterial({
+          map: this.textures[key],
+          roughness: 0.85,
+          metalness: 0.05,
+        });
+      } else if (TEXTURE_GENERATORS[key]) {
+        const texCanvas = TEXTURE_GENERATORS[key](1024);
         const texture = new THREE.CanvasTexture(texCanvas);
         texture.colorSpace = THREE.SRGBColorSpace;
         planetMat = new THREE.MeshStandardMaterial({

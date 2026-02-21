@@ -1047,87 +1047,7 @@ export function generateCeresTexture(size = 512) {
   const data = imageData.data;
   const noise = createNoiseGenerator(801);
   const noise2 = createNoiseGenerator(802);
-  const h = size / 2;
-
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < size; x++) {
-      const nx = x / size * 8;
-      const ny = y / h * 4;
-
-      const terrain = fbm(noise, nx, ny, 6, 0.55, 2.0) * 0.5 + 0.5;
-      const craters = Math.max(0, -fbm(noise2, nx * 3 + 50, ny * 3 + 50, 4, 0.6, 2.2) * 0.6);
-      let value = terrain - craters;
-
-      // Occator-like bright spots
-      const spotX = (x / size - 0.35);
-      const spotY = (y / h - 0.45);
-      const spotDist = Math.sqrt(spotX * spotX + spotY * spotY);
-      const spot = spotDist < 0.03 ? (1 - spotDist / 0.03) * 0.6 : 0;
-
-      value = clamp(value + spot, 0, 1);
-      const [r, g, b] = blendColors(60, 60, 55, 150, 148, 140, value);
-
-      const i = (y * size + x) * 4;
-      data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 255;
-    }
-  }
-  ctx.putImageData(imageData, 0, 0);
-  return canvas;
-}
-
-/** Pluto: heart-shaped nitrogen ice, reddish tholins, methane terrain */
-export function generatePlutoTexture(size = 512) {
-  const { canvas, ctx } = createCanvas(size, size / 2);
-  const imageData = ctx.createImageData(size, size / 2);
-  const data = imageData.data;
-  const noise = createNoiseGenerator(930);
-  const noise2 = createNoiseGenerator(931);
-  const h = size / 2;
-
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < size; x++) {
-      const nx = x / size * 8;
-      const ny = y / h * 4;
-
-      const terrain = fbm(noise, nx, ny, 6, 0.5, 2.0) * 0.5 + 0.5;
-      const detail = fbm(noise2, nx * 4, ny * 4, 4, 0.4, 2.2) * 0.15;
-
-      // Heart-shaped Sputnik Planitia region
-      const hx = (x / size - 0.4);
-      const hy = (y / h - 0.5);
-      const heartDist = Math.sqrt(hx * hx * 1.2 + hy * hy);
-      const isHeart = heartDist < 0.12;
-
-      let r, g, b;
-      if (isHeart) {
-        const iceVal = 0.8 + fbm(noise2, nx * 2, ny * 2, 3, 0.3, 2.0) * 0.1;
-        [r, g, b] = blendColors(180, 170, 155, 220, 210, 195, clamp(iceVal, 0, 1));
-      } else {
-        const val = clamp(terrain + detail, 0, 1);
-        [r, g, b] = blendColors(120, 85, 65, 195, 165, 130, val);
-      }
-
-      // Polar frost
-      const lat = Math.abs(y / h - 0.5) * 2;
-      if (lat > 0.8) {
-        const frost = (lat - 0.8) / 0.2;
-        [r, g, b] = blendColors(r, g, b, 200, 195, 185, frost * 0.5);
-      }
-
-      const i = (y * size + x) * 4;
-      data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 255;
-    }
-  }
-  ctx.putImageData(imageData, 0, 0);
-  return canvas;
-}
-
-/** Haumea: bright crystalline water ice, subtle features */
-export function generateHaumeaTexture(size = 512) {
-  const { canvas, ctx } = createCanvas(size, size / 2);
-  const imageData = ctx.createImageData(size, size / 2);
-  const data = imageData.data;
-  const noise = createNoiseGenerator(126);
+  const noise3 = createNoiseGenerator(803);
   const h = size / 2;
 
   for (let y = 0; y < h; y++) {
@@ -1135,11 +1055,41 @@ export function generateHaumeaTexture(size = 512) {
       const nx = x / size * 10;
       const ny = y / h * 5;
 
-      const ice = fbm(noise, nx, ny, 5, 0.45, 2.0) * 0.5 + 0.5;
-      const fractures = Math.abs(fbm(noise, nx * 6 + 100, ny * 6 + 100, 3, 0.4, 2.0)) * 0.15;
-      const val = clamp(ice + fractures, 0, 1);
+      // Multi-scale terrain: broad regions + fine surface detail
+      const broad = fbm(noise, nx, ny, 4, 0.6, 2.0) * 0.5 + 0.5;
+      const fine  = fbm(noise2, nx * 4 + 10, ny * 4 + 10, 5, 0.55, 2.2) * 0.5 + 0.5;
+      // Deep craters: negative features
+      const craterRaw = fbm(noise3, nx * 2.5 + 50, ny * 2.5 + 50, 4, 0.65, 2.2);
+      const craters = Math.max(0, -craterRaw) * 0.55;
+      let value = broad * 0.55 + fine * 0.45 - craters;
 
-      const [r, g, b] = blendColors(180, 178, 172, 225, 222, 215, val);
+      // Crater floors: dark grey-brown
+      let [r, g, b] = craters > 0.12
+        ? blendColors(38, 36, 32, 95, 92, 85, clamp(value + craters, 0, 1))
+        : blendColors(68, 65, 58, 158, 153, 143, clamp(value, 0, 1));
+
+      // Occator Crater — large, prominent bright carbonate deposits
+      // Primary spot (sodium carbonate)
+      const ox = x / size - 0.34, oy = y / h - 0.44;
+      const od = Math.sqrt(ox * ox + oy * oy);
+      if (od < 0.055) {
+        const spotT = 1 - od / 0.055;
+        const brightness = spotT * spotT * 0.85;
+        r = Math.round(r + (248 - r) * brightness);
+        g = Math.round(g + (244 - g) * brightness);
+        b = Math.round(b + (238 - b) * brightness);
+      }
+      // Secondary spot (ammonium chloride, slightly bluish-white)
+      const ox2 = x / size - 0.37, oy2 = y / h - 0.43;
+      const od2 = Math.sqrt(ox2 * ox2 + oy2 * oy2);
+      if (od2 < 0.022) {
+        const spotT2 = 1 - od2 / 0.022;
+        const b2 = spotT2 * spotT2 * 0.7;
+        r = Math.round(r + (240 - r) * b2);
+        g = Math.round(g + (242 - g) * b2);
+        b = Math.round(b + (252 - b) * b2);
+      }
+
       const i = (y * size + x) * 4;
       data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 255;
     }
@@ -1148,28 +1098,197 @@ export function generateHaumeaTexture(size = 512) {
   return canvas;
 }
 
-/** Makemake: frozen methane/ethane with reddish tholins */
+/** Pluto: New Horizons-accurate — dark Cthulhu Macula, bright Sputnik Planitia heart,
+ *  reddish-brown tholins, nitrogen/methane ice terrain, polar frost */
+export function generatePlutoTexture(size = 512) {
+  const { canvas, ctx } = createCanvas(size, size / 2);
+  const imageData = ctx.createImageData(size, size / 2);
+  const data = imageData.data;
+  const noise  = createNoiseGenerator(930);
+  const noise2 = createNoiseGenerator(931);
+  const noise3 = createNoiseGenerator(932);
+  const h = size / 2;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < size; x++) {
+      const nx = x / size * 8;
+      const ny = y / h * 4;
+
+      const terrain  = fbm(noise,  nx,       ny,       6, 0.52, 2.0) * 0.5 + 0.5;
+      const detail   = fbm(noise2, nx * 3.5, ny * 3.5, 5, 0.42, 2.2) * 0.5 + 0.5;
+      const tholins  = fbm(noise3, nx * 1.5, ny * 1.5, 4, 0.48, 2.0) * 0.5 + 0.5;
+      const fx = x / size, fy = y / h;
+
+      // ── Cthulhu Macula: large dark reddish-brown equatorial region ──
+      // Spans ~x 0.52–0.98, y 0.30–0.72 (anti-heart hemisphere)
+      const cthX = Math.max(0, Math.min(1, (fx - 0.52) / 0.46));
+      const cthY = 1 - Math.abs(fy - 0.50) / 0.22;
+      const cthulhu = clamp(cthX * cthY + fbm(noise3, nx * 0.6 + 5, ny * 0.6 + 5, 3, 0.5, 2.0) * 0.35, 0, 1);
+
+      // ── Sputnik Planitia: bright nitrogen ice heart ──
+      // True New Horizons heart: elongated lobe centred ~x 0.36, y 0.48
+      const hx = fx - 0.36, hy = fy - 0.48;
+      // Heart curve: approximation of the iconic teardrop shape
+      const heartCore = Math.sqrt(hx * hx * 0.9 + hy * hy * 1.1);
+      const heartWing = Math.sqrt((hx - 0.06) * (hx - 0.06) * 1.8 + (hy + 0.05) * (hy + 0.05));
+      const heartDist = Math.min(heartCore, heartWing);
+      const inHeart = heartDist < 0.145;
+      const heartEdge = clamp(1 - heartDist / 0.145, 0, 1);
+
+      let r, g, b;
+
+      if (inHeart) {
+        // Bright creamy nitrogen/methane ice with subtle variation
+        const iceVar = fbm(noise2, nx * 2, ny * 2, 3, 0.35, 2.0) * 0.12;
+        const iceVal = clamp(0.82 + iceVar, 0, 1);
+        [r, g, b] = blendColors(195, 185, 168, 238, 228, 212, iceVal);
+        // Slightly darker mountain ridge at heart edge
+        if (heartEdge < 0.12) {
+          const ridge = (1 - heartEdge / 0.12) * 0.3;
+          [r, g, b] = blendColors(r, g, b, 145, 118, 92, ridge);
+        }
+      } else if (cthulhu > 0.38) {
+        // Dark Cthulhu: deep reddish-brown, almost black in places
+        const dark = clamp((cthulhu - 0.38) / 0.62, 0, 1);
+        const val  = terrain * 0.4 + detail * 0.35 + tholins * 0.25;
+        [r, g, b] = blendColors(88, 52, 35, 155, 98, 68, val);
+        // Extra darkening in deepest Cthulhu
+        if (dark > 0.6) {
+          const extra = (dark - 0.6) / 0.4;
+          [r, g, b] = blendColors(r, g, b, 42, 24, 16, extra * 0.55);
+        }
+      } else {
+        // General terrain: tan-orange with tholin variation
+        const val = terrain * 0.45 + detail * 0.35 + tholins * 0.20;
+        const thRed = tholins > 0.58 ? (tholins - 0.58) / 0.42 : 0;
+        [r, g, b] = blendColors(112, 80, 58, 202, 168, 128, clamp(val, 0, 1));
+        // Tholin patches add reddish tint
+        r = clamp(r + Math.round(thRed * 30), 0, 255);
+        g = clamp(g - Math.round(thRed * 8),  0, 255);
+      }
+
+      // Polar frost caps: bright methane/nitrogen ice
+      const lat = Math.abs(fy - 0.5) * 2;
+      if (lat > 0.72) {
+        const frost = clamp((lat - 0.72) / 0.28, 0, 1);
+        const frostNoise = fbm(noise, nx * 3, ny * 3 + 20, 3, 0.4, 2.0) * 0.5 + 0.5;
+        const frostBlend = frost * (0.6 + frostNoise * 0.4);
+        [r, g, b] = blendColors(r, g, b, 222, 215, 200, clamp(frostBlend, 0, 1));
+      }
+
+      const i = (y * size + x) * 4;
+      data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
+/** Haumea: bright water-ice body with red tholin polar regions (confirmed spectroscopy)
+ *  and a deep fracture/chaotic terrain network */
+export function generateHaumeaTexture(size = 512) {
+  const { canvas, ctx } = createCanvas(size, size / 2);
+  const imageData = ctx.createImageData(size, size / 2);
+  const data = imageData.data;
+  const noise  = createNoiseGenerator(126);
+  const noise2 = createNoiseGenerator(127);
+  const noise3 = createNoiseGenerator(128);
+  const h = size / 2;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < size; x++) {
+      const nx = x / size * 10;
+      const ny = y / h * 5;
+
+      // Base crystalline water-ice: high albedo but not uniform
+      const ice     = fbm(noise,  nx,        ny,        5, 0.50, 2.0) * 0.5 + 0.5;
+      const detail  = fbm(noise2, nx * 2.5,  ny * 2.5,  4, 0.45, 2.0) * 0.5 + 0.5;
+      // Chaotic fracture network: sharp ridges and troughs
+      const frac    = Math.abs(fbm(noise3, nx * 7 + 100, ny * 7 + 100, 4, 0.55, 2.2));
+      const fracDeep = Math.abs(fbm(noise3, nx * 12 + 50, ny * 12 + 50, 3, 0.6, 2.0));
+
+      const iceVal = ice * 0.6 + detail * 0.4;
+      let [r, g, b] = blendColors(152, 150, 145, 232, 228, 220, clamp(iceVal, 0, 1));
+
+      // Dark fractures cut across the surface
+      if (frac < 0.18) {
+        const fracT = 1 - frac / 0.18;
+        [r, g, b] = blendColors(r, g, b, 68, 65, 70, fracT * 0.65);
+      }
+      if (fracDeep < 0.10) {
+        const t = 1 - fracDeep / 0.10;
+        [r, g, b] = blendColors(r, g, b, 48, 44, 52, t * 0.55);
+      }
+
+      // Red-brown tholin polar regions (spectroscopically confirmed, mid-lat bands)
+      const fy  = y / h;
+      const lat = Math.abs(fy - 0.5) * 2; // 0 = equator, 1 = pole
+      // Tholins appear at mid-latitudes ~0.45–0.75 and poles
+      const thNoise = fbm(noise2, nx * 1.5 + 30, ny * 1.5 + 30, 3, 0.5, 2.0) * 0.5 + 0.5;
+      const tholin = lat > 0.40 ? clamp((lat - 0.40) / 0.35, 0, 1) * (0.5 + thNoise * 0.5) : 0;
+      if (tholin > 0.05) {
+        [r, g, b] = blendColors(r, g, b, 185, 105, 72, tholin * 0.70);
+      }
+      // Bright frost returns at poles
+      if (lat > 0.80) {
+        const frost = clamp((lat - 0.80) / 0.20, 0, 1);
+        [r, g, b] = blendColors(r, g, b, 238, 235, 228, frost * 0.55);
+      }
+
+      const i = (y * size + x) * 4;
+      data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
+/** Makemake: dominated by reddish-orange tholins (most prominent of all KBOs),
+ *  scattered bright methane/ethane ice patches, no atmosphere */
 export function generateMakemakeTexture(size = 512) {
   const { canvas, ctx } = createCanvas(size, size / 2);
   const imageData = ctx.createImageData(size, size / 2);
   const data = imageData.data;
-  const noise = createNoiseGenerator(2005);
+  const noise  = createNoiseGenerator(2005);
   const noise2 = createNoiseGenerator(2006);
+  const noise3 = createNoiseGenerator(2007);
   const h = size / 2;
 
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < size; x++) {
-      const nx = x / size * 8;
-      const ny = y / h * 4;
+      const nx = x / size * 9;
+      const ny = y / h * 4.5;
 
-      const terrain = fbm(noise, nx, ny, 6, 0.5, 2.0) * 0.5 + 0.5;
-      const tholins = fbm(noise2, nx * 2 + 50, ny * 2 + 50, 4, 0.45, 2.0) * 0.5 + 0.5;
+      const terrain = fbm(noise,  nx,       ny,       6, 0.52, 2.0) * 0.5 + 0.5;
+      const tholins = fbm(noise2, nx * 1.8 + 30, ny * 1.8 + 30, 5, 0.50, 2.0) * 0.5 + 0.5;
+      const ice     = fbm(noise3, nx * 4  + 80, ny * 4  + 80,  4, 0.58, 2.2) * 0.5 + 0.5;
 
-      const val = clamp(terrain, 0, 1);
-      const thVal = clamp(tholins, 0, 1);
-      let [r, g, b] = blendColors(155, 130, 105, 200, 175, 145, val);
-      r = clamp(r + thVal * 20, 0, 255);
-      g = clamp(g - thVal * 5, 0, 255);
+      // Base: reddish-orange tholin-dominated surface (much redder than Pluto)
+      const val = terrain * 0.40 + tholins * 0.60;
+      let [r, g, b] = blendColors(142, 85, 52, 228, 148, 88, clamp(val, 0, 1));
+
+      // Bright methane ice patches (scattered, ~15–20% coverage)
+      // Ice appears as isolated bright spots where frost condenses
+      const iceThresh = 0.68;
+      if (ice > iceThresh) {
+        const iceBlend = clamp((ice - iceThresh) / (1 - iceThresh), 0, 1);
+        // Methane ice: bright white with slight yellowish tint
+        [r, g, b] = blendColors(r, g, b, 238, 232, 210, iceBlend * iceBlend * 0.88);
+      }
+
+      // Subtle dark bands (topographic variation in the tholin layer)
+      const darkBand = fbm(noise, nx * 0.5 + 5, ny * 0.5 + 5, 3, 0.45, 2.0) * 0.5 + 0.5;
+      if (darkBand < 0.30) {
+        const dT = 1 - darkBand / 0.30;
+        [r, g, b] = blendColors(r, g, b, 85, 45, 28, dT * 0.40);
+      }
+
+      // Polar brightening: ethane/methane frosts at poles
+      const lat = Math.abs(y / h - 0.5) * 2;
+      if (lat > 0.78) {
+        const frost = clamp((lat - 0.78) / 0.22, 0, 1);
+        [r, g, b] = blendColors(r, g, b, 230, 220, 195, frost * 0.50);
+      }
 
       const i = (y * size + x) * 4;
       data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 255;
@@ -1179,24 +1298,61 @@ export function generateMakemakeTexture(size = 512) {
   return canvas;
 }
 
-/** Eris: extremely reflective nitrogen ice, nearly white */
+/** Eris: highest albedo of any solar system body (0.96) — methane frost blanket,
+ *  very bright but with visible pressure ridges, old dark terrain peeking through */
 export function generateErisTexture(size = 512) {
   const { canvas, ctx } = createCanvas(size, size / 2);
   const imageData = ctx.createImageData(size, size / 2);
   const data = imageData.data;
-  const noise = createNoiseGenerator(2003);
+  const noise  = createNoiseGenerator(2003);
+  const noise2 = createNoiseGenerator(2004);
+  const noise3 = createNoiseGenerator(2008);
   const h = size / 2;
 
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < size; x++) {
-      const nx = x / size * 8;
-      const ny = y / h * 4;
+      const nx = x / size * 9;
+      const ny = y / h * 4.5;
 
-      const ice = fbm(noise, nx, ny, 5, 0.4, 2.0) * 0.5 + 0.5;
-      const cracks = Math.abs(fbm(noise, nx * 8 + 200, ny * 8 + 200, 3, 0.5, 2.0)) * 0.1;
-      const val = clamp(ice - cracks, 0, 1);
+      // Ultra-high albedo methane frost — mostly white
+      const frost  = fbm(noise,  nx,        ny,        5, 0.42, 2.0) * 0.5 + 0.5;
+      const underfrost = fbm(noise2, nx * 2.2, ny * 2.2, 4, 0.55, 2.2) * 0.5 + 0.5;
 
-      const [r, g, b] = blendColors(190, 190, 195, 235, 235, 240, val);
+      // Pressure ridges: sharp, narrow dark lineations (methane compresses and cracks)
+      const ridge1 = Math.abs(fbm(noise3, nx * 9  + 200, ny * 9  + 200, 4, 0.58, 2.2));
+      const ridge2 = Math.abs(fbm(noise3, nx * 14 + 100, ny * 14 + 100, 3, 0.62, 2.0));
+
+      // Dominant: near-pure white frost surface
+      const frostVal = frost * 0.55 + underfrost * 0.45;
+      let [r, g, b] = blendColors(200, 200, 208, 245, 244, 248, clamp(frostVal, 0, 1));
+
+      // Subtle blue tint in deepest frost (methane ice has slight blue absorption)
+      if (frostVal > 0.78) {
+        const blueT = (frostVal - 0.78) / 0.22;
+        b = clamp(b + Math.round(blueT * 8), 0, 255);
+        r = clamp(r - Math.round(blueT * 4), 0, 255);
+      }
+
+      // Pressure ridges — dark grey-blue crevasses
+      if (ridge1 < 0.14) {
+        const rt = 1 - ridge1 / 0.14;
+        [r, g, b] = blendColors(r, g, b, 82, 88, 105, rt * 0.72);
+      }
+      if (ridge2 < 0.09) {
+        const rt2 = 1 - ridge2 / 0.09;
+        [r, g, b] = blendColors(r, g, b, 65, 70, 88, rt2 * 0.60);
+      }
+
+      // Darker ancient terrain poking through frost at equatorial low points
+      const lat = Math.abs(y / h - 0.5) * 2;
+      if (lat < 0.35) {
+        const darkTerrain = fbm(noise2, nx * 0.8 + 40, ny * 0.8 + 40, 3, 0.5, 2.0) * 0.5 + 0.5;
+        if (darkTerrain < 0.32) {
+          const dT = (1 - darkTerrain / 0.32) * (1 - lat / 0.35) * 0.45;
+          [r, g, b] = blendColors(r, g, b, 110, 108, 118, dT);
+        }
+      }
+
       const i = (y * size + x) * 4;
       data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 255;
     }

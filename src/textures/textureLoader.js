@@ -59,6 +59,9 @@ const TEXTURE_PATHS = {
   moon: getTexturePath('moon'),
   sun: '/textures/sun_8k.jpg',
   starmap: '/textures/starmap_2k.jpg',
+  // Dwarf planets — real NASA/CC spacecraft imagery
+  pluto: '/textures/dwarfs/pluto_2k.jpg',   // NASA New Horizons global mosaic (public domain)
+  ceres: '/textures/dwarfs/ceres_2k.jpg',   // Solar System Scope CC BY 4.0
 };
 
 /** Solid-color fallback canvas texture (1×1 pixel, neutral grey). */
