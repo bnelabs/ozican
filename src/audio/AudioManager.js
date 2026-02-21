@@ -290,6 +290,11 @@ class AudioManager {
   get isMuted() {
     return this.muted;
   }
+
+  /** Expose AudioContext so SFXManager can share it. */
+  getContext() {
+    return this.ctx;
+  }
 }
 
 export const audioManager = new AudioManager();
