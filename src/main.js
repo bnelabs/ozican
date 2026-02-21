@@ -568,9 +568,54 @@ function showError(message) {
 const DEDICATION_KEY = 'ozmos-dedication-seen';
 
 let dedicationAudio = null;
+let _countdownCancelled = false;
 
-function showDedication() {
+async function runLaunchCountdown() {
+  const el = document.getElementById('launch-countdown');
+  const numEl = document.getElementById('countdown-num');
+  const statusEl = document.getElementById('countdown-status');
+  if (!el || !numEl) return;
+
+  const steps = [
+    { num: '3', status: 'ALL SYSTEMS GO' },
+    { num: '2', status: 'IGNITION SEQUENCE START' },
+    { num: '1', status: 'MAIN ENGINE START' },
+    { num: '0', status: 'LIFTOFF' },
+  ];
+
+  _countdownCancelled = false;
+  el.classList.add('active');
+
+  for (const step of steps) {
+    if (_countdownCancelled) break;
+    numEl.textContent = step.num;
+    numEl.style.animation = 'none';
+    void numEl.offsetWidth; // force reflow to restart animation
+    numEl.style.animation = 'countdown-pulse 1s ease-in-out forwards';
+    if (statusEl) statusEl.textContent = step.status;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+
+  if (_countdownCancelled) {
+    el.classList.remove('active');
+    return;
+  }
+
+  // Brief pause at "LIFTOFF" then fade out
+  await new Promise(r => setTimeout(r, 600));
+  if (_countdownCancelled) { el.classList.remove('active'); return; }
+  el.style.transition = 'opacity 0.8s ease';
+  el.style.opacity = '0';
+  await new Promise(r => setTimeout(r, 900));
+  el.classList.remove('active');
+  el.style.opacity = '';
+}
+
+async function showDedication() {
   dedicationScreen.classList.remove('hidden');
+
+  // Run launch countdown before showing dedication content
+  await runLaunchCountdown();
 
   // Try to play dedication music (lightweight HTML5 audio, not AudioManager)
   try {
@@ -614,6 +659,7 @@ function showDedication() {
   const autoTimer = setTimeout(endDedication, 12000);
 
   dedicationSkip.addEventListener('click', () => {
+    _countdownCancelled = true;
     clearTimeout(autoTimer);
     endDedication();
   });
@@ -621,6 +667,7 @@ function showDedication() {
 
 function endDedication() {
   if (dedicationScreen.classList.contains('hidden')) return;
+  _countdownCancelled = true;
 
   // Init AudioContext synchronously within user gesture (skip button click)
   // so browsers allow autoplay in the subsequent startApp() call
@@ -1298,7 +1345,7 @@ if (navHamburger && navControls) {
 
 function updateMusicIcon() {
   if (musicIcon) {
-    musicIcon.textContent = audioManager.isMuted ? '🔇' : '🔊';
+    musicIcon.textContent = audioManager.isMuted ? '\u266D' : '\u266A';
   }
   if (btnMusic) {
     btnMusic.classList.toggle('active', !audioManager.isMuted);

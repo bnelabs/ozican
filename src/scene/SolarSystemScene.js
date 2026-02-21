@@ -634,13 +634,17 @@ export class SolarSystemScene {
       planetMesh.userData = { key, type: 'planet' };
       tiltGroup.add(planetMesh);
 
-      // Atmosphere for Earth, Venus, Mars
-      if (key === 'earth' || key === 'venus' || key === 'mars') {
-        const atmConfig = {
-          earth: { color: 0x4488ff, intensity: 1.0, scale: 1.05 },
-          venus: { color: 0xddaa44, intensity: 0.6, scale: 1.05 },
-          mars: { color: 0xcc6644, intensity: 0.3, scale: 1.03 },
-        };
+      // Atmosphere for Earth, Venus, Mars, gas giants
+      const atmConfig = {
+        earth:   { color: 0x4488ff, intensity: 1.0, scale: 1.05, thickness: 1.0 },
+        venus:   { color: 0xddaa44, intensity: 0.6, scale: 1.05, thickness: 3.0 },
+        mars:    { color: 0xcc6644, intensity: 0.3, scale: 1.03, thickness: 0.15 },
+        jupiter: { color: 0xccaa77, intensity: 0.5, scale: 1.04, thickness: 2.5 },
+        saturn:  { color: 0xddcc88, intensity: 0.4, scale: 1.04, thickness: 2.0 },
+        uranus:  { color: 0x88ccdd, intensity: 0.4, scale: 1.03, thickness: 2.0 },
+        neptune: { color: 0x4466cc, intensity: 0.5, scale: 1.03, thickness: 2.2 },
+      };
+      if (atmConfig[key]) {
         const atm = atmConfig[key];
         const atmGeo = new THREE.SphereGeometry(planetData.displayRadius * atm.scale, 48, 48);
         const atmMat = new THREE.ShaderMaterial({
@@ -650,6 +654,7 @@ export class SolarSystemScene {
             uColor: { value: new THREE.Color(atm.color) },
             uIntensity: { value: atm.intensity },
             uSunPosition: { value: new THREE.Vector3(0, 0, 0) },
+            uThickness: { value: atm.thickness },
           },
           transparent: true,
           side: THREE.BackSide,

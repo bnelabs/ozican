@@ -16,6 +16,7 @@
     base-uri 'self';
   " />
   <title>OzMos — Solar System Explorer</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="stylesheet" href="/src/styles/main.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 </head>
@@ -29,6 +30,13 @@
 
   <!-- Dedication screen (first visit) -->
   <div id="dedication-screen" class="hidden">
+    <div class="launch-countdown" id="launch-countdown" aria-hidden="true">
+      <div class="countdown-display">
+        <div class="countdown-number" id="countdown-num">3</div>
+        <div class="countdown-label">T-MINUS</div>
+      </div>
+      <div class="countdown-status" id="countdown-status">ALL SYSTEMS GO</div>
+    </div>
     <div class="dedication-bg"></div>
     <div class="dedication-content">
       <h2 class="dedication-heading">To the Infinite and the Intimate</h2>
@@ -80,7 +88,7 @@
   <!-- Top navigation -->
   <nav id="top-nav" aria-label="Main navigation">
     <div class="nav-brand">
-      <span class="brand-icon">&#9788;</span>
+      <span class="brand-icon" aria-hidden="true">&#9673;</span>
       <span class="brand-name">OzMos</span>
       <span class="brand-subtitle" data-i18n="brand.subtitle">Where Ozan Meets the Cosmos</span>
       <span class="brand-tagline" data-i18n="brand.tagline">Solar System Explorer</span>
@@ -89,37 +97,37 @@
     <!-- Collapsible nav controls (hidden on mobile, inline on desktop) -->
     <div class="nav-controls" id="nav-controls">
       <div class="nav-group" data-group-label="Explore">
-        <button id="btn-overview" class="nav-btn active" title="Solar System Overview" aria-label="Solar System Overview" data-i18n-aria="aria.overview" data-i18n="nav.overview">Overview</button>
-        <button id="btn-recenter" class="nav-btn" title="Re-centre on Sun" aria-label="Re-centre on Sun" data-i18n-aria="aria.recenter" data-i18n="nav.recenter">Re-centre</button>
-        <button id="btn-compare" class="nav-btn" title="Compare Planets" aria-label="Compare Planets" aria-pressed="false" data-i18n-aria="aria.compare" data-i18n="nav.compare">Compare</button>
-        <button id="btn-missions" class="nav-btn" title="NASA Missions" aria-label="NASA Missions" data-i18n-aria="aria.missions">
-          <span class="nav-icon">&#128640;</span> <span class="nav-btn-text" data-i18n="nav.missions">Missions</span>
+        <button id="btn-overview" class="nav-btn nav-btn--primary active" title="Solar System Overview" aria-label="Solar System Overview" data-i18n-aria="aria.overview" data-i18n="nav.overview">Overview</button>
+        <button id="btn-recenter" class="nav-btn nav-btn--primary" title="Re-centre on Sun" aria-label="Re-centre on Sun" data-i18n-aria="aria.recenter" data-i18n="nav.recenter">Re-centre</button>
+        <button id="btn-compare" class="nav-btn nav-btn--primary" title="Compare Planets" aria-label="Compare Planets" aria-pressed="false" data-i18n-aria="aria.compare" data-i18n="nav.compare">Compare</button>
+        <button id="btn-missions" class="nav-btn nav-btn--secondary" title="NASA Missions" aria-label="NASA Missions" data-i18n-aria="aria.missions">
+          <span class="nav-btn-text" data-i18n="nav.missions">Missions</span>
         </button>
-        <button id="btn-quiz" class="nav-btn" title="Astrophysics Quiz" aria-label="Astrophysics Quiz">
-          <span class="nav-icon">&#129504;</span> <span class="nav-btn-text" data-i18n="nav.quiz">Quiz</span>
+        <button id="btn-quiz" class="nav-btn nav-btn--secondary" title="Astrophysics Quiz" aria-label="Astrophysics Quiz">
+          <span class="nav-btn-text" data-i18n="nav.quiz">Quiz</span>
         </button>
       </div>
       <div class="nav-divider"></div>
       <div class="nav-group" data-group-label="Display">
-        <button id="btn-speed" class="nav-btn" title="Animation Speed — Note: inner planets naturally orbit faster than outer ones (Kepler's 3rd Law)" aria-label="Animation Speed: 1x" data-i18n-aria="aria.speed">
+        <button id="btn-speed" class="nav-btn nav-btn--utility" title="Animation Speed — Note: inner planets naturally orbit faster than outer ones (Kepler's 3rd Law)" aria-label="Animation Speed: 1x" data-i18n-aria="aria.speed">
           <span data-i18n="nav.speed">Speed</span>: <span id="speed-label">1x</span>
           <span class="speed-mobile-label" data-i18n="nav.timeSpeed">Time speed</span>
         </button>
-        <button id="btn-orbits" class="nav-btn active" title="Toggle Orbit Lines" aria-label="Toggle Orbit Lines" aria-pressed="true" data-i18n-aria="aria.orbits" data-i18n="nav.orbits">Orbits</button>
-        <button id="btn-labels" class="nav-btn active" title="Toggle Labels" aria-label="Toggle Labels" aria-pressed="true" data-i18n-aria="aria.labels" data-i18n="nav.labels">Labels</button>
+        <button id="btn-orbits" class="nav-btn nav-btn--utility active" title="Toggle Orbit Lines" aria-label="Toggle Orbit Lines" aria-pressed="true" data-i18n-aria="aria.orbits" data-i18n="nav.orbits">Orbits</button>
+        <button id="btn-labels" class="nav-btn nav-btn--utility active" title="Toggle Labels" aria-label="Toggle Labels" aria-pressed="true" data-i18n-aria="aria.labels" data-i18n="nav.labels">Labels</button>
       </div>
       <div class="nav-divider"></div>
       <div class="nav-group" data-group-label="Media">
-        <button id="btn-music" class="nav-btn" title="Toggle Music" aria-label="Toggle Background Music" data-i18n-aria="aria.music">
-          <span id="music-icon">&#128264;</span>
+        <button id="btn-music" class="nav-btn nav-btn--media" title="Toggle Music" aria-label="Toggle Background Music" data-i18n-aria="aria.music">
+          <span id="music-icon">&#9834;</span>
         </button>
-        <button id="btn-tour" class="nav-btn" title="Cinematic Tour" aria-label="Cinematic Tour" data-i18n-aria="aria.tour">
-          <span class="nav-icon">&#127902;</span> <span class="nav-btn-text" data-i18n="nav.tour">Tour</span>
+        <button id="btn-tour" class="nav-btn nav-btn--secondary" title="Cinematic Tour" aria-label="Cinematic Tour" data-i18n-aria="aria.tour">
+          <span class="nav-btn-text" data-i18n="nav.tour">Tour</span>
         </button>
-        <button id="btn-storm" class="nav-btn" title="Solar Storm" aria-label="Solar Storm Simulation" data-i18n-aria="aria.storm">
-          <span class="nav-icon">&#9889;</span> <span class="nav-btn-text" data-i18n="nav.storm">Storm</span>
+        <button id="btn-storm" class="nav-btn nav-btn--secondary" title="Solar Storm" aria-label="Solar Storm Simulation" data-i18n-aria="aria.storm">
+          <span class="nav-icon" aria-hidden="true">&#9788;</span> <span class="nav-btn-text" data-i18n="nav.storm">Storm</span>
         </button>
-        <button id="btn-fullscreen" class="nav-btn" title="Fullscreen" aria-label="Toggle Fullscreen" data-i18n-aria="aria.fullscreen">&#x26F6;</button>
+        <button id="btn-fullscreen" class="nav-btn nav-btn--media" title="Fullscreen" aria-label="Toggle Fullscreen" data-i18n-aria="aria.fullscreen">&#x26F6;</button>
       </div>
     </div>
 

@@ -18,19 +18,33 @@ export const atmosphereFragmentShader = `
   uniform vec3 uColor;
   uniform float uIntensity;
   uniform vec3 uSunPosition;
+  uniform float uThickness;
 
   void main() {
     vec3 viewDir = normalize(cameraPosition - vWorldPosition);
     vec3 sunDir = normalize(uSunPosition - vWorldPosition);
 
     float fresnel = 1.0 - dot(vNormal, viewDir);
-    float glow = pow(fresnel, 3.0) * uIntensity;
+
+    // Rayleigh-inspired wavelength-dependent scattering
+    // Blue light scatters ~4x more than red (wavelength^-4 relationship)
+    float viewAngle = fresnel; // 0 = head-on, 1 = limb
+    float scatter = pow(viewAngle, max(1.5, 3.0 - uThickness));
+
+    vec3 baseColor = uColor;
+    // Shift toward blue at high scatter (limb), toward red at low scatter (horizon effect)
+    float blueShift = scatter * uThickness * 0.3;
+    float redShift = (1.0 - scatter) * 0.15;
+    vec3 scatteredColor = baseColor + vec3(-redShift * 0.5, 0.0, blueShift);
+    scatteredColor = clamp(scatteredColor, 0.0, 1.0);
+
+    float glow = scatter * uIntensity;
 
     // Sun-facing side is brighter
     float sunFacing = dot(vNormal, sunDir) * 0.5 + 0.5;
     glow *= mix(0.05, 1.0, sunFacing);
 
-    gl_FragColor = vec4(uColor, glow * 0.5);
+    gl_FragColor = vec4(scatteredColor, glow * uThickness * 0.6);
   }
 `;
 
